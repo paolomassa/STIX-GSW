@@ -53,9 +53,11 @@
 ;   
 ; HISTORY: August 2022, Massa P., created
 ;          July 2023, Massa P., made it compatible with the new definition of (u,v)-points (see stx_uv_points)
+;          April 2025, Massa P., made it compatible with new ELUT correction. 
+;                Bkg-subtraction is already applied before data are provided as input to this function.
 ;
 ; CONTACT:
-;   paolo.massa@wku.edu
+;   paolo.massa@fhnw.ch
 ;-
 
 function stx_pixel_data_summed2visibility, pixel_data_summed, subc_index=subc_index, mapcenter=mapcenter, $
@@ -88,15 +90,6 @@ count_rates     = pixel_data_summed.COUNT_RATES
 count_rates     = count_rates[subc_index,*]
 counts_rates_error = pixel_data_summed.COUNTS_RATES_ERROR
 counts_rates_error = counts_rates_error[subc_index,*]
-
-count_rates_bkg = pixel_data_summed.COUNT_RATES_BKG
-count_rates_bkg = count_rates_bkg[subc_index,*]
-count_rates_error_bkg = pixel_data_summed.COUNT_RATES_ERROR_BKG
-count_rates_error_bkg = count_rates_error_bkg[subc_index,*]
-
-;; Background subtraction
-count_rates = count_rates - count_rates_bkg
-counts_rates_error = sqrt(counts_rates_error^2 + count_rates_error_bkg^2)
 
 ;; A,B,C,D
 A = count_rates[*,0]

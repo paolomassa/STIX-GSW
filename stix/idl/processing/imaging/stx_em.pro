@@ -39,8 +39,9 @@
 ;          August 2022, Massa P., made it compatible with the up-to-date imaging software and added backrgound correction
 ;                       in the EM iterative scheme
 ;          July 2023, Massa P., made it compatible with the new definition of (u,v)-points (see stx_uv_points)
+;          April 2025, Massa P., made it compatible with new ELUT correction. Bkg-subtraction is performed before the counts are provided as input.
 ;             
-;CONTACT: massa.p@dima.unige.it
+;CONTACT: paolo.massa@fhnw.ch
 
 FUNCTION stx_em, pixel_data_summed, aux_data, imsize=imsize, pixel=pixel, $
                  mapcenter=mapcenter, subc_index=subc_index, $
@@ -122,9 +123,6 @@ n_det_used = n_elements(subc_index)
 countrates = pixel_data_summed.COUNT_RATES[subc_index,*]
 y = reform(countrates, n_det_used*4)
 
-countrates_bkg = pixel_data_summed.COUNT_RATES_BKG[subc_index,*]
-b = reform(countrates_bkg, n_det_used*4)
-
 ;;**************** EXPECTATION MAXIMIZATION ALGORITHM
 
 ;Initialization
@@ -138,17 +136,17 @@ if ~keyword_set(silent) then print, 'EM iterations: ' & print, 'N. Iter:      ST
 ; Loop of the algorithm
 for iter = 1, maxiter do begin
   Hx = H # x
-  z = f_div(y , Hx + b)
+  z = f_div(y , Hx)
   Hz = H ## z
 
   x = x * transpose(f_div(Hz, Ht1))
 
-  cstat = 2. / n_elements(y[y_index]) * total(y[y_index] * alog(f_div(y[y_index],Hx[y_index] + b[y_index])) + Hx[y_index] + b[y_index] - y[y_index])
+  cstat = 2. / n_elements(y[y_index]) * total(y[y_index] * alog(f_div(y[y_index],Hx[y_index])) + Hx[y_index] - y[y_index])
 
   ; Stopping rule
   if iter gt 10 and (iter mod 25) eq 0 then begin
     emp_back_res = total((x * (Ht1 - Hz))^2)
-    std_back_res = total(x^2 * (f_div(1.0, Hx + b) # H2))
+    std_back_res = total(x^2 * (f_div(1.0, Hx) # H2))
     std_index = f_div(emp_back_res, std_back_res)
 
     if ~keyword_set(silent) then print, iter, std_index, cstat

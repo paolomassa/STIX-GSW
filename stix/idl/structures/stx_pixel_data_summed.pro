@@ -18,9 +18,11 @@
 ;
 ;
 ; HISTORY: July 2022, Massa P., created
+;          April 2025, Massa P., made it compatible with new ELUT correction. Bkg-subtraction is applied to the counts.
+;                      Therefore, information on bkg is not stored anymore
 ;
 ; CONTACT:
-;   paolo.massa@wku.edu
+;   paolo.massa@fhnw.ch
 ;-
 
 
@@ -36,11 +38,6 @@ function stx_pixel_data_summed
     counts_rates_error    : dblarr(32,4), $             ; Errors associated with the measured counts rates (statistics + compression, 
                                                         ; no systematic errors are included)
     tot_counts            : double(0), $                ; Total number of counts recorded during the event
-    live_time_bkg         : fltarr(32), $               ; Live time of the 32 detectors during the background measurement
-    count_rates_bkg       : dblarr(32,4), $             ; Counts rates recored by the the sub-collimators (summed in time and energy) during the
-                                                        ; background measurement
-    count_rates_error_bkg : dblarr(32,4), $             ; Errors associated with the measured background counts (statistics + compression, 
-                                                        ; no systematic errors are included)
     tot_counts_bkg        : double(0), $                ; Estimate of the total number of background counts recorded during the flaring event
     rcr                   : byte(0), $                  ; Rate Control Regime (RCR) status
     xy_flare              : fltarr(2), $                ; Estimate of the flare location used for grids' transmission correction

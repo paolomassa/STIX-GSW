@@ -30,6 +30,7 @@ function stx_pixel_data
   return, { $
     type                  : 'stx_pixel_data', $
     live_time             : fltarr(32), $               ; Live time of the 32 detectors
+    live_time_error       : fltarr(32), $               ; Live time error of the 32 detectors
     time_range            : replicate(stx_time(),2), $  ; Selected time range (edges) 
     energy_range          : fltarr(2), $                ; Selected energy range (edges)
     counts                : dblarr(32,12), $            ; Counts recorded by the detector pixels (summed in time and energy)

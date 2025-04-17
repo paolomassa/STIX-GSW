@@ -211,24 +211,34 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
 
   ;;************** Compute livetime
 
-  triggergram        = stx_triggergram(data.TRIGGERS, t_axis)
-  livetime_fraction  = stx_livetime_fraction(triggergram)
+  triggergram        = stx_triggergram(data.TRIGGERS, data.TRIGGERS_ERR, t_axis)
+  livetime_fraction_data = stx_livetime_fraction(triggergram)
+  livetime_fraction = livetime_fraction_data.livetime_fraction
+  livetime_fraction_err = livetime_fraction_data.livetime_fraction_err
   duration_time_bins = t_axis.DURATION
   duration_time_bins = transpose(cmreplicate(duration_time_bins, 32))
-  live_time_bins     = livetime_fraction*duration_time_bins
-  live_time          = n_elements(time_ind) eq 1? reform(live_time_bins[*,time_ind]) : $
-    total(live_time_bins[*,time_ind],2)
-
+  
+  live_time_bins     = livetime_fraction * duration_time_bins
+  live_time_bins_err = livetime_fraction_err * duration_time_bins
+  
+  live_time = n_elements(time_ind) eq 1? reform(live_time_bins[*,time_ind]) : total(live_time_bins[*,time_ind],2)
+  live_time_error = n_elements(time_ind) eq 1? reform(live_time_bins_err[*,time_ind]) : $
+    sqrt(total(live_time_bins_err[*,time_ind]^2.,2))
+  
   if keyword_set(path_bkg_file) then begin
-
-    triggergram_bkg        = stx_triggergram(data_bkg.TRIGGERS, t_axis_bkg)
-    livetime_fraction_bkg  = stx_livetime_fraction(triggergram_bkg)
+  
+    triggergram_bkg        = stx_triggergram(data_bkg.TRIGGERS, data_bkg.TRIGGERS_ERR, t_axis_bkg)
+    livetime_fraction_bkg_data = stx_livetime_fraction(triggergram_bkg)
+    livetime_fraction_bkg = livetime_fraction_bkg_data.livetime_fraction
+    livetime_fraction_bkg_err = livetime_fraction_bkg_data.livetime_fraction_err
     duration_time_bins_bkg = t_axis_bkg.DURATION
     live_time_bkg          = duration_time_bins_bkg[0]*livetime_fraction_bkg
-
+    live_time_error_bkg    = duration_time_bins_bkg[0]*livetime_fraction_bkg_err
+  
   endif else begin
-    
+  
     live_time_bkg = dblarr(32) + 1.
+    live_time_error_bkg = dblarr(32)
     
   endelse
 
@@ -311,12 +321,16 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
   ;;************** Background subtraction
   
   live_time_rep = transpose(cmreplicate(live_time, [n_elements(energy_bin_idx),12]), [1,2,0])
+  live_time_error_rep = transpose(cmreplicate(live_time_error, [n_elements(energy_bin_idx),12]), [1,2,0])
   live_time_bkg_rep = keyword_set(path_bkg_file)? transpose(cmreplicate(live_time_bkg, [n_elements(energy_bin_idx_bkg),12]), [1,2,0]) : fltarr(size(counts_bkg, /dim)) + 1.
+  live_time_error_bkg_rep = keyword_set(path_bkg_file)? transpose(cmreplicate(live_time_error_bkg, [n_elements(energy_bin_idx_bkg),12]), [1,2,0]) : fltarr(size(counts_bkg, /dim))
   
+  counts_bkg_estimate = f_div( live_time_rep * counts_bkg, live_time_bkg_rep )
+  error_numerator = abs(live_time_rep * counts_bkg) * sqrt( f_div(live_time_error_rep,live_time_rep)^2. + $
+    f_div(counts_error_bkg,counts_bkg)^2.)
+  counts_bkg_estimate_error = abs(counts_bkg_estimate) * sqrt( f_div(error_numerator,live_time_rep * counts_bkg)^2. + $
+    f_div(live_time_error_bkg_rep,live_time_bkg_rep)^2.)
   
-  counts_bkg = f_div( live_time_rep * counts_bkg, live_time_bkg_rep )
-  counts_error_bkg = f_div( live_time_rep * counts_error_bkg, live_time_bkg_rep )
-
   if elut_corr and ~silent then begin
 
     ;; To be used for plot of the bkg subtracted spectrum
@@ -326,8 +340,8 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
   endif
   
   ;; Apply BKG subtraction
-  counts = counts - counts_bkg
-  counts_error = sqrt(counts_error^2. +  counts_error_bkg^2.)
+  counts = counts - counts_bkg_estimate
+  counts_error = sqrt(counts_error^2. +  counts_bkg_estimate_error^2.)
   
   ;; Determine indices of the selected pixels. It will be used for estimating total number of BKG counts and for estimating the amount of ELUT correction
   case sumcase of
@@ -713,6 +727,7 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
   pixel_data.TIME_RANGE       = this_time_range
   pixel_data.ENERGY_RANGE     = this_energy_range
   pixel_data.LIVE_TIME        = live_time
+  pixel_data.LIVE_TIME_ERROR  = live_time_error
   pixel_data.COUNTS           = transpose(counts)
   pixel_data.COUNTS_ERROR     = transpose(counts_error)
   if keyword_set(path_bkg_file) then pixel_data.TOT_COUNTS_BKG   = tot_counts_bkg

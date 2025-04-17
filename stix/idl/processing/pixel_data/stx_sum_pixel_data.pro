@@ -101,22 +101,23 @@ pixel_masks = reform(pixel_data.PIXEL_MASKS,4,3)
 
 if total(pixel_masks[*,pixel_ind]) lt 4.*n_elements(pixel_ind) then message, "Change 'sumcase': one of the selected pixels is not available"
 
-count_rates = reform(pixel_data.COUNTS, 32, 4, 3)
+counts = reform(pixel_data.COUNTS, 32, 4, 3)
 ;; Compute total counts: saved in the pixel data structure
-tot_counts     = total(count_rates[subc_index,*,pixel_ind])
+tot_counts     = total(counts[subc_index,*,pixel_ind])
 
-count_rates = n_elements( pixel_ind ) eq 1 ? reform(count_rates[*, *, pixel_ind]) : $
-              total( count_rates[*, *, pixel_ind], 3 )
+counts = n_elements( pixel_ind ) eq 1 ? reform(counts[*, *, pixel_ind]) : $
+              total( counts[*, *, pixel_ind], 3 )
 
-counts_rates_error = reform(pixel_data.COUNTS_ERROR, 32, 4, 3)
-counts_rates_error = n_elements( pixel_ind ) eq 1 ? reform(counts_rates_error[*, *, pixel_ind]) : $
-                     sqrt(total( counts_rates_error[*, *, pixel_ind]^2, 3 ))
+counts_error = reform(pixel_data.COUNTS_ERROR, 32, 4, 3)
+counts_error = n_elements( pixel_ind ) eq 1 ? reform(counts_error[*, *, pixel_ind]) : $
+                     sqrt(total( counts_error[*, *, pixel_ind]^2, 3 ))
 
 ;;************** Livetime correction: units are counts s^-1
 
 live_time          = cmreplicate(pixel_data.LIVE_TIME, 4)
-count_rates        = f_div(count_rates,live_time)
-counts_rates_error = f_div(counts_rates_error,live_time)
+live_time_error    = cmreplicate(pixel_data.LIVE_TIME_ERROR, 4)
+count_rates        = f_div(counts,live_time)
+counts_rates_error = abs(count_rates) * sqrt( f_div(counts_error,counts)^2. + f_div(live_time_error,live_time)^2. )
 
 ;;************** Print total number of counts
 

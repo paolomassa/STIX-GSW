@@ -335,7 +335,7 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
 
     ;; To be used for plot of the bkg subtracted spectrum
     spectrum_with_bkg = total(total(counts[*,0:7,subc_index], 3), 2) / (energy_high - energy_low)
-    spectrum_bkg = keyword_set(path_bkg_file)? total(total(counts_bkg[*,0:7,subc_index], 3), 2) / (energy_high_bkg - energy_low_bkg) : total(total(counts_error_bkg[*,0:7,subc_index], 3), 2)
+    spectrum_bkg = keyword_set(path_bkg_file)? total(total(counts_bkg_estimate[*,0:7,subc_index], 3), 2) / (energy_high_bkg - energy_low_bkg) : total(total(counts_bkg[*,0:7,subc_index], 3), 2)
     
   endif
   
@@ -645,15 +645,31 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
   
     if ~silent then begin
       
-      ;; Print minimun and maximum ELUT correction in the different pixels
+;      ;; Print minimun and maximum ELUT correction in the different pixels
+;      elut_corr_perc = f_div(abs(counts_no_elut -  counts_elut),counts_no_elut) * 100 ;; in percentage
+;      
+;      print
+;      print
+;      print,'***********************************************************************'
+;      print
+;      print,'Min/Max ELUT correction in the different pixels: '+num2str(min(elut_corr_perc), format='(f7.2)')+'% - '+num2str(max(elut_corr_perc), format='(f7.2)')+'% '
+;      print
+;      print,'***********************************************************************'
+;      print
+;      print
+
+       ;; Print minimun and maximum ELUT correction in the different pixels
       elut_corr_perc = f_div(abs(counts_no_elut -  counts_elut),counts_no_elut) * 100 ;; in percentage
-      
+      counts_error_reshaped = reform(counts_error, 4, 3, 32)
+      counts_error_elut=reform(counts_error_reshaped[*,pixel_ind,subc_index])
+      rel_error=abs(counts_error_elut/counts_elut)*100.
       print
       print
       print,'***********************************************************************'
-      print
       print,'Min/Max ELUT correction in the different pixels: '+num2str(min(elut_corr_perc), format='(f7.2)')+'% - '+num2str(max(elut_corr_perc), format='(f7.2)')+'% '
-      print
+      print,'Averaged ELUT correction in a pixel:             '+num2str(average(elut_corr_perc), format='(f7.2)')+'%'
+      print,'standard deviation of ELUT correction:           '+num2str(stdev(elut_corr_perc), format='(f7.2)')+'%'
+      print,'Averaged error in counts in a pixel:             '+num2str(average(rel_error), format='(f7.2)')+'%'
       print,'***********************************************************************'
       print
       print

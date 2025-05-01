@@ -672,10 +672,10 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
       print
       print
       print,'***********************************************************************'
-      print,'Min/Max ELUT correction in the different pixels: '+num2str(min(elut_corr_perc), format='(f7.2)')+'% - '+num2str(max(elut_corr_perc), format='(f7.2)')+'% '
-      print,'Averaged ELUT correction in a pixel:             '+num2str(average(elut_corr_perc), format='(f7.2)')+'%'
-      print,'standard deviation of ELUT correction:           '+num2str(stdev(elut_corr_perc), format='(f7.2)')+'%'
-      print,'Averaged error in counts in a pixel:             '+num2str(average(rel_error), format='(f7.2)')+'%'
+      print,'Min/Max ELUT correction over all pixels:               '+num2str(min(elut_corr_perc), format='(f7.2)')+'% - '+num2str(max(elut_corr_perc), format='(f7.2)')+'% '
+      print,'Average ELUT correction over all pixels:               '+num2str(average(elut_corr_perc), format='(f7.2)')+'%'
+      print,'Standard deviation of ELUT correction over all pixels: '+num2str(stdev(elut_corr_perc), format='(f7.2)')+'%'
+      print,'Average count error over all pixels:                   '+num2str(average(rel_error), format='(f7.2)')+'%'
       print,'***********************************************************************'
       print
       print

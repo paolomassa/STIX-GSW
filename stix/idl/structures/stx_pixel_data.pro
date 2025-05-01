@@ -35,6 +35,7 @@ function stx_pixel_data
     energy_range          : fltarr(2), $                ; Selected energy range (edges)
     counts                : dblarr(32,12), $            ; Counts recorded by the detector pixels (summed in time and energy)
     counts_error          : dblarr(32,12), $            ; Errors associated with the measured counts (statistics + compression)
+    tot_counts            : double(0), $                ; Estimate of the total number of flare counts recorded during the flaring event
     tot_counts_bkg        : double(0), $                ; Estimate of the total number of background counts recorded during the flaring event
     xy_flare              : fltarr(2),  $               ; Estimate of the flare location used for grids' transmission correction
     rcr                   : byte(0), $                  ; Rate Control Regime (RCR) status

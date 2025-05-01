@@ -119,23 +119,6 @@ live_time_error    = cmreplicate(pixel_data.LIVE_TIME_ERROR, 4)
 count_rates        = f_div(counts,live_time)
 counts_rates_error = abs(count_rates) * sqrt( f_div(counts_error,counts)^2. + f_div(live_time_error,live_time)^2. )
 
-;;************** Print total number of counts
-
-if ~silent then begin
-  
-  print
-  print
-  print,'***********************************************************************'
-  print,'Total number of counts in image:  '+strtrim(tot_counts)
-  print,'Background counts:                '+strtrim(pixel_data.tot_counts_bkg)
-  print,'Counts above background:          '+strtrim(tot_counts-pixel_data.tot_counts_bkg)
-  print,'Total to background:              '+strtrim(tot_counts/pixel_data.tot_counts_bkg)
-  print,'***********************************************************************'
-  print
-  print
-
-endif
-
 ;;************** Normalization per keV: units are counts s^-1 keV^-1
 
 energy_range = pixel_data.ENERGY_RANGE
@@ -161,7 +144,7 @@ pixel_data_summed.TIME_RANGE   = pixel_data.TIME_RANGE
 pixel_data_summed.ENERGY_RANGE = pixel_data.ENERGY_RANGE
 pixel_data_summed.COUNT_RATES  = count_rates
 pixel_data_summed.COUNTS_RATES_ERROR = counts_rates_error
-pixel_data_summed.TOT_COUNTS      = tot_counts
+pixel_data_summed.TOT_COUNTS      = pixel_data.tot_counts
 pixel_data_summed.TOT_COUNTS_BKG = pixel_data.tot_counts_bkg
 pixel_data_summed.RCR            = pixel_data.RCR                
 pixel_data_summed.XY_FLARE       = pixel_data.XY_FLARE

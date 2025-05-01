@@ -339,10 +339,6 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
     
   endif
   
-  ;; Apply BKG subtraction
-  counts = counts - counts_bkg_estimate
-  counts_error = sqrt(counts_error^2. +  counts_bkg_estimate_error^2.)
-  
   ;; Determine indices of the selected pixels. It will be used for estimating total number of BKG counts and for estimating the amount of ELUT correction
   case sumcase of
 
@@ -366,15 +362,38 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
       pixel_ind = [2]
     end
   end
-    
-
+  
+  ;; Compute total number of counts (to be used for comparison with bkg counts)
+  counts_reshaped = reform(counts,n_elements(energy_bin_idx), 4, 3, 32)
+  tot_counts = total(counts_reshaped[energy_ind,*,pixel_ind,subc_index])
+  
+  ;; Apply BKG subtraction
+  counts = counts - counts_bkg_estimate
+  counts_error = sqrt(counts_error^2. +  counts_bkg_estimate_error^2.)  
   
   if keyword_set(path_bkg_file) then begin
-  
+    
     ;; Compute total number of background counts. Select only imaging detectors
-    counts_bkg = reform(counts_bkg, n_elements(energy_bin_idx_bkg), 4, 3, 32)
+    counts_bkg = reform(counts_bkg_estimate, n_elements(energy_bin_idx_bkg), 4, 3, 32)
     tot_counts_bkg = total(counts_bkg[energy_ind_bkg,*,pixel_ind,subc_index])
   
+  endif
+  
+  ;;************** Print total number of counts
+
+  if ~silent then begin
+
+    print
+    print
+    print,'***********************************************************************'
+    print,'Total number of counts in image:  '+strtrim(tot_counts)
+    print,'Background counts:                '+strtrim(tot_counts_bkg)
+    print,'Counts above background:          '+strtrim(tot_counts-tot_counts_bkg)
+    print,'Total to background:              '+strtrim(tot_counts/tot_counts_bkg)
+    print,'***********************************************************************'
+    print
+    print
+
   endif
   
   ;;************** Sum counts (and related errors) in energy
@@ -644,19 +663,6 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
     endelse
   
     if ~silent then begin
-      
-;      ;; Print minimun and maximum ELUT correction in the different pixels
-;      elut_corr_perc = f_div(abs(counts_no_elut -  counts_elut),counts_no_elut) * 100 ;; in percentage
-;      
-;      print
-;      print
-;      print,'***********************************************************************'
-;      print
-;      print,'Min/Max ELUT correction in the different pixels: '+num2str(min(elut_corr_perc), format='(f7.2)')+'% - '+num2str(max(elut_corr_perc), format='(f7.2)')+'% '
-;      print
-;      print,'***********************************************************************'
-;      print
-;      print
 
        ;; Print minimun and maximum ELUT correction in the different pixels
       elut_corr_perc = f_div(abs(counts_no_elut -  counts_elut),counts_no_elut) * 100 ;; in percentage
@@ -746,6 +752,7 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
   pixel_data.LIVE_TIME_ERROR  = live_time_error
   pixel_data.COUNTS           = transpose(counts)
   pixel_data.COUNTS_ERROR     = transpose(counts_error)
+  pixel_data.TOT_COUNTS       = tot_counts
   if keyword_set(path_bkg_file) then pixel_data.TOT_COUNTS_BKG   = tot_counts_bkg
 
   if ~keyword_set(xy_flare) then begin

@@ -68,17 +68,12 @@
 ;   shift_duration: if set, shift all time bins by 1 to account for FSW time input discrepancy prior to 09-Dec-2021.
 ;                   N.B. WILL ONLY WORK WITH FULL TIME RESOLUTION DATA WHICH IS OFTEN NOT THE CASE FOR PIXEL DATA.
 ;
-;   gain_offset_version: string indicating which version of the daily gain/offset values is used. Options are:
-;                   'original': values derived from O. Limousin's calibration runs
-;                   'savgol': values smoothed by means of the Savitzky–Golay filter. The considered window size is 21 days.
-;                   'median': values smoothed by means of a moving median filter. The considered window size is 21 days. This is the default value.
-;
 ; HISTORY: July 2022, Massa P., created
 ;          September 2022, Massa P., added 'shift_duration' keyword
 ;          May 2023, Massa P., do not call 'stx_plot_selected_time_range' if the science fits file contains a single time bin
 ;          October 2023, Massa P., fixed bug in the selection of the energy bin indices
 ;          November 2023, Massa P., use simplified version of the subcollimator transmission (temporary solution)
-;          April, 2025, Massa P., new ELUT correction based on daily gain and offset values. 
+;          April, 2025, Massa P., new ELUT correction based on daily gain and offset values.
 ;              Bkg subtraction is applied before ELUT correction is computed.
 ;
 ; CONTACT:
@@ -88,7 +83,7 @@
 function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut_corr=elut_corr, $
   path_bkg_file=path_bkg_file, xy_flare=xy_flare, subc_index=subc_index, $
   sumcase=sumcase, silent=silent, no_small=no_small, no_rcr_check=no_rcr_check, $
-  shift_duration=shift_duration, gain_offset_version=gain_offset_version,  _extra=extra
+  shift_duration=shift_duration,  _extra=extra
 
   default, elut_corr, 1
   default, silent, 0
@@ -139,10 +134,10 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
   ;; Select indices of the energy bins (among the 32) that are actually present in the pixel data science file
   energy_bin_mask = data.energy_bin_mask
   energy_bin_idx  = where(energy_bin_mask eq 1)
-  
+
   energy_low  = e_axis.LOW
   energy_high = e_axis.HIGH
-  
+
   if (energy_range[0] lt min(energy_low)) then $
     message, 'The lower edge of the selected energy interval is outside the science energy interval (' + $
     num2str(fix(min(energy_low))) + ' - ' + num2str(fix(max(energy_high))) + ' keV)'
@@ -175,11 +170,11 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
     energy_min = max([energy_min,min(energy_low_bkg)])
     energy_max = min([energy_max,max(energy_high_bkg)])
     idx_energy_bkg = where((energy_low_bkg ge energy_min) and (energy_high_bkg le energy_max))
-    
+
     energy_bin_idx_bkg = energy_bin_idx_bkg[idx_energy_bkg]
     energy_low_bkg = energy_low_bkg[idx_energy_bkg]
     energy_high_bkg = energy_high_bkg[idx_energy_bkg]
-    
+
     energy_ind_min_bkg = where(energy_low_bkg le energy_range[0])
     energy_ind_min_bkg = energy_ind_min_bkg[-1]
     energy_ind_max_bkg = where(energy_high_bkg ge energy_range[1])
@@ -191,14 +186,14 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
     this_energy_range_bkg = [energy_low_bkg[energy_ind_min_bkg], energy_high_bkg[energy_ind_max_bkg]]
 
   endif
-  
+
   ;; Extract energy range in common between science and background file
   idx_energy = where((energy_low ge energy_min) and (energy_high le energy_max))
-  
+
   energy_bin_idx = energy_bin_idx[idx_energy]
   energy_low = energy_low[idx_energy]
   energy_high = energy_high[idx_energy]
-  
+
   energy_ind_min = where(energy_low le energy_range[0])
   energy_ind_min = energy_ind_min[-1]
   energy_ind_max = where(energy_high ge energy_range[1])
@@ -217,16 +212,16 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
   livetime_fraction_err = livetime_fraction_data.livetime_fraction_err
   duration_time_bins = t_axis.DURATION
   duration_time_bins = transpose(cmreplicate(duration_time_bins, 32))
-  
+
   live_time_bins     = livetime_fraction * duration_time_bins
   live_time_bins_err = livetime_fraction_err * duration_time_bins
-  
+
   live_time = n_elements(time_ind) eq 1? reform(live_time_bins[*,time_ind]) : total(live_time_bins[*,time_ind],2)
   live_time_error = n_elements(time_ind) eq 1? reform(live_time_bins_err[*,time_ind]) : $
     sqrt(total(live_time_bins_err[*,time_ind]^2.,2))
-  
+
   if keyword_set(path_bkg_file) then begin
-  
+
     triggergram_bkg        = stx_triggergram(data_bkg.TRIGGERS, data_bkg.TRIGGERS_ERR, t_axis_bkg)
     livetime_fraction_bkg_data = stx_livetime_fraction(triggergram_bkg)
     livetime_fraction_bkg = livetime_fraction_bkg_data.livetime_fraction
@@ -234,12 +229,12 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
     duration_time_bins_bkg = t_axis_bkg.DURATION
     live_time_bkg          = duration_time_bins_bkg[0]*livetime_fraction_bkg
     live_time_error_bkg    = duration_time_bins_bkg[0]*livetime_fraction_bkg_err
-  
+
   endif else begin
-  
+
     live_time_bkg = dblarr(32) + 1.
     live_time_error_bkg = dblarr(32)
-    
+
   endelse
 
   ;;************** Define count matrix and bkg count matrix
@@ -256,24 +251,24 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
   ;; Dimensions: [energy,pixel,detector,time]
   counts       = data.COUNTS
   counts_error = data.COUNTS_ERR
-  
+
   ;; Consider only selected energy bins
   counts       = counts[energy_bin_idx,*,*,*]
   counts_error = counts_error[energy_bin_idx,*,*,*]
 
   if keyword_set(path_bkg_file) then begin
-    
+
     ;; Check if science and background files are reconrded with the same ELUT
-    
+
     elut_filename = stx_date2elut_file(stx_time2any(this_time_range[0]))
     stx_read_elut, elut_gain, elut_offset, adc4096_str, elut_filename = elut_filename, ekev_actual = ekev_actual_elut
-    
+
     elut_filename_bkg = stx_date2elut_file(stx_time2any(t_axis_bkg.TIME_START))
     stx_read_elut, ekev_actual = ekev_actual_bkg, elut_filename = elut_filename_bkg
-    
+
     ;; Compare ELUT tables
     elut_comp = STRCMP(elut_filename, elut_filename_bkg)
-    
+
     if not elut_comp then $
       message, 'The background file must be recorded when the same ELUT as the science file was uploaded. Please choose a different background file that is closer in time to the science file.'
 
@@ -283,12 +278,12 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
     counts_error_bkg = counts_error_bkg[energy_bin_idx_bkg,*,*]
 
   endif else begin
-    
+
     counts_bkg       = dblarr(size(counts, /dim))
     counts_error_bkg = dblarr(size(counts, /dim))
-    
+
   endelse
-  
+
   ;;************** Plot lightcurve (if ~silent)
 
   if ~silent and (n_elements(size(live_time_bins, /dim)) gt 1) then begin
@@ -317,28 +312,28 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
     counts_error = sqrt(total(counts_error[*,*,*,time_ind]^2.,4))
 
   endelse
-  
+
   ;;************** Background subtraction
-  
+
   live_time_rep = transpose(cmreplicate(live_time, [n_elements(energy_bin_idx),12]), [1,2,0])
   live_time_error_rep = transpose(cmreplicate(live_time_error, [n_elements(energy_bin_idx),12]), [1,2,0])
   live_time_bkg_rep = keyword_set(path_bkg_file)? transpose(cmreplicate(live_time_bkg, [n_elements(energy_bin_idx_bkg),12]), [1,2,0]) : fltarr(size(counts_bkg, /dim)) + 1.
   live_time_error_bkg_rep = keyword_set(path_bkg_file)? transpose(cmreplicate(live_time_error_bkg, [n_elements(energy_bin_idx_bkg),12]), [1,2,0]) : fltarr(size(counts_bkg, /dim))
-  
+
   counts_bkg_estimate = f_div( live_time_rep * counts_bkg, live_time_bkg_rep )
   error_numerator = abs(live_time_rep * counts_bkg) * sqrt( f_div(live_time_error_rep,live_time_rep)^2. + $
     f_div(counts_error_bkg,counts_bkg)^2.)
   counts_bkg_estimate_error = abs(counts_bkg_estimate) * sqrt( f_div(error_numerator,live_time_rep * counts_bkg)^2. + $
     f_div(live_time_error_bkg_rep,live_time_bkg_rep)^2.)
-  
+
   if elut_corr and ~silent then begin
 
     ;; To be used for plot of the bkg subtracted spectrum
     spectrum_with_bkg = total(total(counts[*,0:7,subc_index], 3), 2) / (energy_high - energy_low)
     spectrum_bkg = keyword_set(path_bkg_file)? total(total(counts_bkg_estimate[*,0:7,subc_index], 3), 2) / (energy_high_bkg - energy_low_bkg) : total(total(counts_bkg[*,0:7,subc_index], 3), 2)
-    
+
   endif
-  
+
   ;; Determine indices of the selected pixels. It will be used for estimating total number of BKG counts and for estimating the amount of ELUT correction
   case sumcase of
 
@@ -362,23 +357,27 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
       pixel_ind = [2]
     end
   end
-  
+
   ;; Compute total number of counts (to be used for comparison with bkg counts)
   counts_reshaped = reform(counts,n_elements(energy_bin_idx), 4, 3, 32)
   tot_counts = total(counts_reshaped[energy_ind,*,pixel_ind,subc_index])
-  
+
   ;; Apply BKG subtraction
   counts = counts - counts_bkg_estimate
-  counts_error = sqrt(counts_error^2. +  counts_bkg_estimate_error^2.)  
-  
+  counts_error = sqrt(counts_error^2. +  counts_bkg_estimate_error^2.)
+
   if keyword_set(path_bkg_file) then begin
-    
+
     ;; Compute total number of background counts. Select only imaging detectors
     counts_bkg = reform(counts_bkg_estimate, n_elements(energy_bin_idx_bkg), 4, 3, 32)
     tot_counts_bkg = total(counts_bkg[energy_ind_bkg,*,pixel_ind,subc_index])
-  
-  endif
-  
+
+  endif else begin
+    
+    tot_counts_bkg = 0.
+    
+  endelse
+
   ;;************** Print total number of counts
 
   if ~silent then begin
@@ -395,276 +394,35 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
     print
 
   endif
-  
+
   ;;************** Sum counts (and related errors) in energy
 
   ;; Compute elut correction (if 'elut_corr' is set) - Correct just the first and the last energy bins (flat spectrum is assumed)
   if elut_corr then begin
     
-    ;;**************** Compute spectral index to be used for ELUT correction
+    ;; Create daily ELUT
+    daily_elut = stx_create_daily_elut(stx_time2any(this_time_range[0]),  _extra=extra)
+    energy_bin_low = daily_elut.ENERGY_BIN_LOW
+    energy_bin_high = daily_elut.ENERGY_BIN_HIGH
     
-    spectrum = total(total(counts[*,0:7,subc_index], 3), 2) / (energy_high - energy_low)
-    index_data = stx_estimate_spectral_index(energy_low, energy_high, spectrum)
-    
-    sp_index = index_data.index_final
-    idx_peak = index_data.idx_peak
-    
-    if ~silent then begin
-    
-      charsize = 1.8
-      
-      loadct,5
-      device, Window_State=win_state
-      if not win_state[10] then window,10,xsize=1000,ysize=500
-      wset,10
-      cleanplot
-      
-      !p.multi = [0,2,1]
-      
-      energy_axis = (energy_low+energy_high)/2.
-      
-      plot, energy_axis, spectrum_with_bkg, psym=10, /xst, /yst, /ylog, /xlog, yrange=[max([1.,min(spectrum)]),max(spectrum)*10.],charsize=charsize, $
-        title='STIX spectrum',xtitle='Energy [keV]', ytitle = 'STIX spectrum [counts s!U-1!n keV!U-1!n]'
-      oplot, [this_energy_range[0],this_energy_range[0]], [max([1.,min(spectrum)]),max(spectrum)*10.], linestyle=1
-      oplot, [this_energy_range[1],this_energy_range[1]], [max([1.,min(spectrum)]),max(spectrum)*10.], linestyle=1
-      oplot, energy_axis, spectrum_bkg, psym=10, linestyle=2
-      oplot, energy_axis, spectrum, psym=10, color=122
-      leg_text = ['Observed spectrum', 'Background', 'BKG-subtracted']
-      leg_color = [255,255,122]
-      leg_style = [0, 2, 0]
-      ssw_legend, leg_text, color=leg_color, linest=leg_style, box=0, charsize=1.5, thick=1.5, /right
-      
-      
-      plot,energy_axis, sp_index, psym=10, /xst, /yst, /xlog, charsize=charsize, $
-        title='Estimate of the spectral index', xtitle='Energy [keV]', ytitle = 'Spectral index'
-      oplot, [this_energy_range[0],this_energy_range[0]], [-20,20], linestyle=1
-      oplot, [this_energy_range[1],this_energy_range[1]], [-20,20], linestyle=1
-      oplot, [4,150], [0,0], linestyle=2
-      
-    endif
-    
-    ;; Read daily gain and offset
-    calibration_data = mrdfits(concat_dir( concat_dir('SSW_STIX','dbase'),'detector') + get_delim() + 'daily_gain_offset.fits',1)
-    calibration_date = anytim(calibration_data.DATE)
-    
-    case gain_offset_version of
-    
-      'original': begin
-        
-                  daily_gain = calibration_data.GAIN
-                  daily_offset = calibration_data.OFFSET
-                  
-                  end
-
-      'savgol': begin
-                
-                daily_gain = calibration_data.GAIN_SAVGOL
-                daily_offset = calibration_data.OFFSET_SAVGOL
-                
-                end
-
-      'median': begin
-        
-                daily_gain = calibration_data.GAIN_MEDIAN
-                daily_offset = calibration_data.OFFSET_MEDIAN
-                
-                end
-                
-        else: begin
-              message, 'Keyword gain_offset_version must be set equal to original, savgol, or median.'
-              end
-    
-    end
-    
-    
-    if anytim(time_range[0]) le calibration_date[0] then begin
-      
-      print
-      print
-      print, 'WARNING: daily calibration data are available only from ' + anytim(calibration_date[0], /vms) + '. Results can be inaccurate!'
-      print
-      print
-      
-    endif
-    
-    idx_today = value_locate(calibration_date, anytim(time_range[0]))
-    today_gain = reform(daily_gain[*,*,idx_today])
-    today_offset = reform(daily_offset[*,*,idx_today])
-
-    ;; Read ELUT channels
-    elut_filename = stx_date2elut_file(stx_time2any(this_time_range[0]))
-    stx_read_elut, elut_gain, elut_offset, adc4096_str, elut_filename = elut_filename, ekev_actual = ekev_actual_elut
-    
-    
-    elut_channels = adc4096_str.ADC4096
-    ekev_actual = fltarr(31,12,32)
-    
-    for i=0,30 do begin
-      ;; Energy edges in keV which correspond to the onboard binning edges in native channel unit (~0.1 keV)
-      ;; ekev_actual is obtained by applying the daily gain and offset derived from calibration fitting to the onboard ELUT channel numbers
-      ekev_actual[i,*,*] =  (reform(elut_channels[i,*,*]) - today_offset) / today_gain 
-      
-    endfor
-    
-    ;; We assume that the first energy bin starts from 0. The right end of the last energy bin is set to NaN
-    ;; We assume that the energy interval is always partitioned into 32 energy bins
-    energy_bin_low           = fltarr(32,12,32)
-    energy_bin_low[1:31,*,*] = ekev_actual
-
-    energy_bin_high           = fltarr(32,12,32)
-    energy_bin_high[0:30,*,*] = ekev_actual
-    energy_bin_high[31,*,*]   = !VALUES.F_NaN
-
     energy_bin_low  = energy_bin_low[energy_bin_idx,*,*]
     energy_bin_high = energy_bin_high[energy_bin_idx,*,*]
     
-
-    ;; We assume the spectrum has a powerlaw distribution E^-sp_index at any energy bin.
-    ;
-    ;  The number of counts in the energy range [a,b] is 
-    ;  
-    ;  C = \int_a^b E^-sp_index dE = (b^(-sp_index+1) - a^(-sp_index+1)) / (-sp_index+1)
-    ;
-    ;  We distinguish 3 cases:
-    ;
-    ; 1. The considered energy range consists of a single energy bin which is not at the peak 
-    ;    (i.e., different from 6-7 keV; example: 9-10 keV). The correction factor is
-    ;    
-    ;    corr = (10^(-sp_index+1) - 9^(-sp_index+1)) / (10.03^(-sp_index+1) - 8.97^(-sp_index+1)), 
-    ;    
-    ;    where 10.03 and 8.97 are derived from daily ELUT
-    ;
-    ; 2. The considered energy range consists of a single energy bin which is at the peak of the spectrum 
-    ;    (i.e., 6-7 keV when attenuator is not inserted). We consider the middle point of the energy range (e.g., 6.5 keV) 
-    ;    and we assume that the spectrum follows a powerlaw distribution below and above the middle point, viz.
-    ;    
-    ;             A E^-alpha if E < 6.5 keV
-    ;     F(E) =  
-    ;             B E^-beta if E >= 6.5 keV
-    ;    
-    ;    where alpha < 0 and beta > 0. Assuming that the spectrum is continuous at 6.5 keV, 
-    ;    we obtain that A and B are related to the following equation:
-    ;    
-    ;    A = B 6.5^(alpha - beta)
-    ;    
-    ;    Assuming that the ELUT edges of the considered energy bin are 5.98 and 7.05 keV, we obtain
-    ;    
-    ;    corr = (\int_6^7 F(E) dE) / (\int_5.98^7.05 F(E) dE) ,
-    ;    
-    ;    which leads to
-    ;    
-    ;    corr = (6.5^(alpha - beta) * (6.5^(-alpha+1) - 6^(-alpha+1)) / (-alpha + 1) ) + (7^(-beta+1) - 6.5^(-beta+1)) / (-beta+1) ) / 
-    ;           (6.5^(alpha - beta) * (6.5^(-alpha+1) - 5.98^(-alpha+1)) / (-alpha + 1) ) + (7.05^(-beta+1) - 6.5^(-beta+1)) / (-beta+1) )
-    ;    
-    ; 3. The considered energy range consists of multiple energy bins (e.g, 5-10 keV). Therefore, we apply a correction factor 
-    ;    only to the lowest and to the highest bin (corr_low and corr_high). Assuming that the energy edges of these bins contained 
-    ;    in the ELUT table are 5.01, 5.98 keV and 8.97, 10.02 keV, we have
-    ;    
-    ;    corr_low = (5.98^(-alpha+1) - 5^(-alpha+1)) / (5.98^(-alpha+1) - 5.01^(-alpha+1))
-    ;    
-    ;    and
-    ;    
-    ;    corr_high = (10^(-beta+1) - 8.97^(-beta+1)) / (10.02^(-beta+1) - 8.97^(-beta+1))
-    ;    
-    ;    where alpha and beta are the powerlaw indices in the first and the last energy bins, respectively.
-  
-    if n_elements(energy_ind) eq 1 then begin
-      
-      if energy_ind eq idx_peak then begin
-        
-        ;; energy_bin_idx contains at least two indices (see control above)
-        case energy_ind of
-          
-          0: begin
-            
-            sp_index_low = sp_index[energy_ind+1]
-            sp_index_high = sp_index[energy_ind+1]
-            
-            end
-           
-          n_elements(energy_bin_idx)-1: begin
-            
-            sp_index_low = sp_index[energy_ind-1]
-            sp_index_high = sp_index[energy_ind-1]
-            
-            end
-            
-          else: begin
-            
-            sp_index_low = sp_index[energy_ind-1]
-            sp_index_high = sp_index[energy_ind+1]
-            
-            end
-          
-        endcase
-        
-        energy_bin_mid = (energy_high[energy_ind] + energy_low[energy_ind]) / 2.
-        
-        corr_factor_low_ELUT = (energy_bin_mid^(-sp_index_low+1.) - reform(energy_bin_low[energy_ind,*,*])^(-sp_index_low+1.)) / $
-                               (-sp_index_low+1.)
-        corr_factor_high_ELUT = (reform(energy_bin_high[energy_ind,*,*])^(-sp_index_high+1.) - energy_bin_mid^(-sp_index_high+1.)) / $
-                               (-sp_index_high+1.)
-        
-        corr_factor_low_SCI = (energy_bin_mid^(-sp_index_low+1.) - energy_low[energy_ind]^(-sp_index_low+1.)) / (-sp_index_low+1.)
-        corr_factor_high_SCI = (energy_high[energy_ind]^(-sp_index_high+1.) - energy_bin_mid^(-sp_index_high+1.)) / (-sp_index_high+1.)
-  
-        norm_factor = energy_bin_mid^(-sp_index_high + sp_index_low)
-        energy_corr_factor = elut_corr ? (norm_factor * corr_factor_low_SCI + corr_factor_high_SCI) / $
-                                         (norm_factor * corr_factor_low_ELUT + corr_factor_high_ELUT) : dblarr(12,32)+1
-        
-      endif else begin
-  
-        energy_corr_factor = elut_corr ? $
-          (energy_high[energy_ind]^(-sp_index[energy_ind]+1.) - energy_low[energy_ind]^(-sp_index[energy_ind]+1.)) / $
-          (reform(energy_bin_high[energy_ind,*,*])^(-sp_index[energy_ind]+1.) - reform(energy_bin_low[energy_ind,*,*])^(-sp_index[energy_ind]+1.)) : $
-          dblarr(12,32)+1
-  
-      endelse
-      
-      ;; Compute total number of counts BEFORE ELUT correction is applied. It is used for estimating the amount of the ELUT correction
-      counts_reshaped = reform(counts, n_elements(energy_bin_idx), 4, 3, 32)
-      counts_no_elut = reform(total(counts_reshaped[energy_ind,*,pixel_ind,subc_index], 1))
-      
-      counts     = reform(counts[energy_ind,*,*]) * energy_corr_factor
-      counts_error = reform(counts_error[energy_ind,*,*]) * energy_corr_factor
-      
-      ;; Compute total number of counts AFTER ELUT correction is applied. It is used for estimating the amount of the ELUT correction
-      counts_reshaped = reform(counts, 4, 3, 32)
-      counts_elut = reform(counts_reshaped[*,pixel_ind,subc_index])
-  
-    endif else begin
+    ;; Apply ELUT correction
+    spectrum = total(total(counts[*,0:7,subc_index], 3), 2) / (energy_high - energy_low)
+    elut_data = stx_elut_correction(counts, counts_error, $
+                              energy_bin_idx, energy_bin_low, energy_bin_high, energy_high, energy_low, energy_ind, this_energy_range, $
+                              spectrum, spectrum_with_bkg, spectrum_bkg, $
+                              pixel_ind, subc_index, silent=silent)
     
-      energy_corr_factor_low = elut_corr ? $
-        (reform(energy_bin_high[energy_ind[0],*,*])^(-sp_index[energy_ind[0]]+1.) - energy_low[energy_ind[0]]^(-sp_index[energy_ind[0]]+1.)) / $
-        (reform(energy_bin_high[energy_ind[0],*,*])^(-sp_index[energy_ind[0]]+1.) - reform(energy_bin_low[energy_ind[0],*,*])^(-sp_index[energy_ind[0]]+1.)) : $
-        dblarr(12,32)+1
-  
-      energy_corr_factor_high = elut_corr ? $
-        (energy_high[energy_ind[-1]]^(-sp_index[energy_ind[-1]]+1.) - reform(energy_bin_low[energy_ind[-1],*,*])^(-sp_index[energy_ind[-1]]+1.)) / $
-        (reform(energy_bin_high[energy_ind[-1],*,*])^(-sp_index[energy_ind[-1]]+1.) - reform(energy_bin_low[energy_ind[-1],*,*])^(-sp_index[energy_ind[-1]]+1.)) : $
-        dblarr(12,32)+1
-  
-      ;; Compute total number of counts BEFORE ELUT correction is applied. It is used for estimating the amount of the ELUT correction
-      counts_reshaped = reform(counts, n_elements(energy_bin_idx), 4, 3, 32)
-      counts_no_elut = reform(total(counts_reshaped[energy_ind,*,pixel_ind,subc_index], 1))
-      
-      counts[energy_ind[0],*,*]        *= energy_corr_factor_low
-      counts[energy_ind[-1],*,*]       *= energy_corr_factor_high
-      counts_error[energy_ind[0],*,*]  *= energy_corr_factor_low
-      counts_error[energy_ind[-1],*,*] *= energy_corr_factor_high
-  
-      counts       = total(counts[energy_ind,*,*],1)
-      counts_error = sqrt(total(counts_error[energy_ind,*,*]^2.,1))
-      
-      ;; Compute total number of counts AFTER ELUT correction is applied. It is used for estimating the amount of the ELUT correction
-      counts_reshaped = reform(counts, 4, 3, 32)
-      counts_elut = reform(counts_reshaped[*,pixel_ind,subc_index])
-  
-    endelse
-  
+    counts = elut_data.COUNTS
+    counts_error = elut_data.COUNTS_ERROR
+    counts_no_elut = elut_data.COUNTS_NO_ELUT
+    counts_elut = elut_data.COUNTS_ELUT
+
     if ~silent then begin
 
-       ;; Print minimun and maximum ELUT correction in the different pixels
+      ;; Print minimun and maximum ELUT correction in the different pixels
       elut_corr_perc = f_div(abs(counts_no_elut -  counts_elut),counts_no_elut) * 100 ;; in percentage
       counts_error_reshaped = reform(counts_error, 4, 3, 32)
       counts_error_elut=reform(counts_error_reshaped[*,pixel_ind,subc_index])
@@ -679,13 +437,21 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
       print,'***********************************************************************'
       print
       print
-      
+
     endif
   endif else begin
     
-    counts       = total(counts[energy_ind,*,*],1)
-    counts_error = sqrt(total(counts_error[energy_ind,*,*]^2.,1))
+    if n_elements(energy_ind) eq 1 then begin
+      
+      counts       = reform(counts[energy_ind,*,*])
+      counts_error = reform(counts_error[energy_ind,*,*])
+      
+    endif else begin
+      
+      counts       = total(counts[energy_ind,*,*],1)
+      counts_error = sqrt(total(counts_error[energy_ind,*,*]^2.,1))
     
+   endelse
   endelse
   ;;************** Correction for grid internal shadowing
 

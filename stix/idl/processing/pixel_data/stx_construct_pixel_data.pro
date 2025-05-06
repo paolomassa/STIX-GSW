@@ -205,30 +205,20 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
   this_energy_range = [energy_low[energy_ind_min], energy_high[energy_ind_max]]
 
   ;;************** Compute livetime
-
-  triggergram        = stx_triggergram(data.TRIGGERS, data.TRIGGERS_ERR, t_axis)
-  livetime_fraction_data = stx_livetime_fraction(triggergram)
-  livetime_fraction = livetime_fraction_data.livetime_fraction
-  livetime_fraction_err = livetime_fraction_data.livetime_fraction_err
-  duration_time_bins = t_axis.DURATION
-  duration_time_bins = transpose(cmreplicate(duration_time_bins, 32))
-
-  live_time_bins     = livetime_fraction * duration_time_bins
-  live_time_bins_err = livetime_fraction_err * duration_time_bins
-
+  
+  live_time_data = stx_cpd_livetime(data.TRIGGERS, data.TRIGGERS_ERR, t_axis)
+  live_time_bins = live_time_data.LIVE_TIME_BINS
+  live_time_bins_err = live_time_data.LIVE_TIME_BINS_ERR
+  
   live_time = n_elements(time_ind) eq 1? reform(live_time_bins[*,time_ind]) : total(live_time_bins[*,time_ind],2)
   live_time_error = n_elements(time_ind) eq 1? reform(live_time_bins_err[*,time_ind]) : $
     sqrt(total(live_time_bins_err[*,time_ind]^2.,2))
 
   if keyword_set(path_bkg_file) then begin
-
-    triggergram_bkg        = stx_triggergram(data_bkg.TRIGGERS, data_bkg.TRIGGERS_ERR, t_axis_bkg)
-    livetime_fraction_bkg_data = stx_livetime_fraction(triggergram_bkg)
-    livetime_fraction_bkg = livetime_fraction_bkg_data.livetime_fraction
-    livetime_fraction_bkg_err = livetime_fraction_bkg_data.livetime_fraction_err
-    duration_time_bins_bkg = t_axis_bkg.DURATION
-    live_time_bkg          = duration_time_bins_bkg[0]*livetime_fraction_bkg
-    live_time_error_bkg    = duration_time_bins_bkg[0]*livetime_fraction_bkg_err
+  
+    live_time_bkg_data = stx_cpd_livetime(data_bkg.TRIGGERS, data_bkg.TRIGGERS_ERR, t_axis_bkg)
+    live_time_bkg = live_time_bkg_data.LIVE_TIME_BINS
+    live_time_error_bkg = live_time_bkg_data.LIVE_TIME_BINS_ERR
 
   endif else begin
 

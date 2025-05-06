@@ -458,8 +458,7 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
   if keyword_set(xy_flare) then begin
 
     ;; Use simplified version of the grid transmission (temporary solution)
-    subc_transmission     = stx_subc_transmission(xy_flare, /simple_transm)
-    subc_transmission_bkg = stx_subc_transmission([0.,0.], /simple_transm)
+    subc_transmission     = stx_subc_transmission(xy_flare)
     for i=0,31 do begin
 
       counts[*,i]       = counts[*,i]/subc_transmission[i]*0.25

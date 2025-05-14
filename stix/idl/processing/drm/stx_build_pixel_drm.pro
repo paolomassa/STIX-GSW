@@ -53,14 +53,13 @@
 ;                                  grids default is nominal 25%
 ;                                  presence of attenuator
 ;   2024-07-12, F. Schuller (AIP): added optional keyword xspec
-;
+;   2025-05-14, P. Massa (FHNW): removed grid_factor
 ;
 ;-
 function stx_build_pixel_drm, ct_energy_edges, pixel_mask, ph_energy_edges = ph_energy_edges, rcr = rcr, $
-         grid_factor= grid_factor, dist_factor= dist_factor, xspec=xspec, _extra = _extra
+         dist_factor= dist_factor, xspec=xspec, _extra = _extra 
 
   default, pixel_mask , intarr(12,32) + 1  ; default pixel mask is all pixels from all detectors
-  default, grid_factor, 1./4.
   default, dist_factor, 1.
 
   default, ph_energy_edges, findgen(1471)*.1+3
@@ -108,9 +107,9 @@ function stx_build_pixel_drm, ct_energy_edges, pixel_mask, ph_energy_edges = ph_
   transmission = stx_transmission(drm.emean, det_mask, attenuator = attenuator)
   dim_drm = size(/dim, smatrix) > 1
 
-  if n_elements(grid_factor) eq  n_elements(ph_in) then grid_factor=10^(interpol(alog10(grid_factor),alog10(ph_in),alog10(drm.emean)))
+  ;if n_elements(grid_factor) eq  n_elements(ph_in) then grid_factor=10^(interpol(alog10(grid_factor),alog10(ph_in),alog10(drm.emean)))
   
-  transmission  = transmission*grid_factor
+  ;transmission  = transmission*grid_factor
 
   smatrix = smatrix * rebin( transpose(transmission), dim_drm)
 

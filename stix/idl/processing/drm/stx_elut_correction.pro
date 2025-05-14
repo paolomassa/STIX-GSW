@@ -18,8 +18,8 @@
 ;   
 ; INPUTS:
 ; 
-;   COUNTS: float array (dimension: number of energy bins x number of pixels x number of detectors) containing the BKG subtracted counts
-;   COUNTS_ERROR: float array (dimension: number of energy bins x number of pixels x number of detectors) containing the uncertainties of BKG subtracted counts
+;   COUNTS_IN: float array (dimension: number of energy bins x number of pixels x number of detectors x number of time bins) containing the BKG subtracted counts
+;   COUNTS_IN_ERROR: float array (dimension: number of energy bins x number of pixels x number of detectors ) containing the uncertainties of BKG subtracted counts
 ;   ENERGY_BIN_IDX: array containing the indices of the energy bins contained in the fits file.
 ;   ENERGY_BIN_LOW: float array of dimension 32 x 12 x 32 (number of energy bins x number of pixels x number of detectors)
 ;                   containing the low energy edges of the daily ELUT.
@@ -30,24 +30,23 @@
 ;   ENERGY_IND: array containing the indices of the energy bins selected for integration along the energy dimension.
 ;   ENERGY_RANGE: array containing the low and high edge of the energy range selected for integration (e.g., [10,15])
 ;   SPECTRUM: array containing the BKG-subtracted spectrum. It is used for deriving the spectral index for each energy bin.
-;   SPECTRUM_WITH_BKG: array containing the observed spectrum (including BKG). It is used for display (if silent is not set to 0)
-;   SPECTRUM_BKG: array containing the BKG spectrum. It is used for display (if silent is not set to 0)
 ;   PIXEL_IND: array containing the indices of the considered pixels (e.g., [0] for top row, [0,1] for top and bottom row, etc.)
 ;   SUBC_INDEX: array containing the indices of the considered sub-collimators.
 ;
 ; OUTPUTS:
 ;   Structure containing:
-;   - COUNTS: array of dimension 12 x 32 containing the ELUT corrected counts integrated within the selected energy interval.
-;   - COUNTS_ERROR: array of dimension 12 x 32 containing the uncertainty associated with the ELUT corrected counts integrated within the selected energy interval. 
-;   - COUNTS_NO_ELUT: array of dimension 4 (A,B,C,D) x number of rows (TOP, BOT, SMALL) x number of subcollimators containing the number of counts integrated in energy without ELUT correction. 
+;   - COUNTS: array of dimension 12 x 32 x number of time bins containing the ELUT corrected counts integrated within the selected energy interval.
+;   - COUNTS_ERROR: array of dimension 12 x 32 x number of time bins containing the uncertainty associated with the ELUT corrected counts integrated within the selected energy interval. 
+;   - COUNTS_NO_ELUT: array of dimension 4 (A,B,C,D) x number of rows (TOP, BOT, SMALL) x number of subcollimators x number of time bins containing the number of counts integrated in energy without ELUT correction. 
 ;                     It is used to compute the amount of ELUT correction for all pixels.
-;   - COUNTS_ELUT: array of dimension 4 (A,B,C,D) x number of rows (TOP, BOT, SMALL) x number of subcollimators containing the number of counts integrated in energy after ELUT correction. 
+;   - COUNTS_ELUT: array of dimension 4 (A,B,C,D) x number of rows (TOP, BOT, SMALL) x number of subcollimators x number of time bins containing the number of counts integrated in energy after ELUT correction. 
 ;                     It is used to compute the amount of ELUT correction for all pixels.
 ; 
-;
 ; KEYWORDS:
 ; 
-;   silent: if set to 1, the spectrum plot is not displayed.
+;   SPECTRUM_WITH_BKG: array containing the observed spectrum (including BKG). It is used for display (if silent is not set to 0)
+;   SPECTRUM_BKG: array containing the BKG spectrum. It is used for display (if silent is not set to 0)
+;   SILENT: if set to 1, the spectrum plot is not displayed.
 ;
 ; HISTORY:
 ;
@@ -55,13 +54,15 @@
 ;   paolo.massa@fhnw.ch
 ;-
 
-function stx_elut_correction, counts, counts_error, $
+function stx_elut_correction, counts_in, counts_in_error, $
                               energy_bin_idx, energy_bin_low, energy_bin_high, energy_high, energy_low, energy_ind, energy_range, $
-                              spectrum, spectrum_with_bkg, spectrum_bkg, $
-                              pixel_ind, subc_index, silent=silent
+                              spectrum, pixel_ind, subc_index, $
+                              spectrum_with_bkg=spectrum_with_bkg, spectrum_bkg=spectrum_bkg, silent=silent
 
 default, gain_offset_version, 'median'
 default, silent, 0
+default, spectrum_with_bkg, fltarr(spectrum.DIM)
+default, spectrum_bkg, fltarr(spectrum.DIM)
 
 ;;**************** Compute spectral index to be used for ELUT correction
 
@@ -103,6 +104,18 @@ if ~silent then begin
   oplot, [4,150], [0,0], linestyle=2
 
 endif
+
+;; Determine whether the time axis is present
+if n_elements(counts_in.dim) eq 4 then begin
+
+  dimensions = counts_in.dim
+  n_times = dimensions[3]
+
+endif else begin
+
+  n_times = 1
+
+endelse
 
 ;; We assume the spectrum has a powerlaw distribution E^-sp_index at any energy bin.
 ;
@@ -202,18 +215,21 @@ if n_elements(energy_ind) eq 1 then begin
       (reform(energy_bin_high[energy_ind,*,*])^(-sp_index[energy_ind]+1.) - reform(energy_bin_low[energy_ind,*,*])^(-sp_index[energy_ind]+1.)) 
 
   endelse
-
+  
+  energy_corr_factor = reform(cmreplicate(energy_corr_factor, n_times))
+  
   ;; Compute total number of counts BEFORE ELUT correction is applied. It is used for estimating the amount of the ELUT correction
-  counts_reshaped = reform(counts, n_elements(energy_bin_idx), 4, 3, 32)
-  counts_no_elut = reform(total(counts_reshaped[energy_ind,*,pixel_ind,subc_index], 1))
+  counts_reshaped = reform(counts_in, n_elements(energy_bin_idx), 4, 3, 32, n_times)
+  counts_no_elut = reform(total(counts_reshaped[energy_ind,*,pixel_ind,subc_index,*], 1))
 
-  counts     = reform(counts[energy_ind,*,*]) * energy_corr_factor
-  counts_error = reform(counts_error[energy_ind,*,*]) * energy_corr_factor
+  counts     = reform(counts_in[energy_ind,*,*,*]) * energy_corr_factor
+  counts_error = reform(counts_in_error[energy_ind,*,*,*]) * energy_corr_factor
 
   ;; Compute total number of counts AFTER ELUT correction is applied. It is used for estimating the amount of the ELUT correction
-  counts_reshaped = reform(counts, 4, 3, 32)
-  counts_elut = reform(counts_reshaped[*,pixel_ind,subc_index])
-
+  counts_reshaped = reform(counts, 4, 3, 32, n_times)
+  counts_elut = reform(counts_reshaped[*,pixel_ind,subc_index,*])
+  
+ 
 endif else begin
 
   energy_corr_factor_low = (reform(energy_bin_high[energy_ind[0],*,*])^(-sp_index[energy_ind[0]]+1.) - energy_low[energy_ind[0]]^(-sp_index[energy_ind[0]]+1.)) / $
@@ -223,27 +239,34 @@ endif else begin
     (reform(energy_bin_high[energy_ind[-1],*,*])^(-sp_index[energy_ind[-1]]+1.) - reform(energy_bin_low[energy_ind[-1],*,*])^(-sp_index[energy_ind[-1]]+1.)) 
 
   ;; Compute total number of counts BEFORE ELUT correction is applied. It is used for estimating the amount of the ELUT correction
-  counts_reshaped = reform(counts, n_elements(energy_bin_idx), 4, 3, 32)
-  counts_no_elut = reform(total(counts_reshaped[energy_ind,*,pixel_ind,subc_index], 1))
-
-  counts[energy_ind[0],*,*]        *= energy_corr_factor_low
-  counts[energy_ind[-1],*,*]       *= energy_corr_factor_high
-  counts_error[energy_ind[0],*,*]  *= energy_corr_factor_low
-  counts_error[energy_ind[-1],*,*] *= energy_corr_factor_high
-
-  counts       = total(counts[energy_ind,*,*],1)
-  counts_error = sqrt(total(counts_error[energy_ind,*,*]^2.,1))
+  counts_reshaped = reform(counts_in, n_elements(energy_bin_idx), 4, 3, 32, n_times)
+  counts_no_elut = reform(total(counts_reshaped[energy_ind,*,pixel_ind,subc_index,*], 1))
+  
+  energy_corr_factor_low = reform(cmreplicate(energy_corr_factor_low, n_times))
+  energy_corr_factor_high = reform(cmreplicate(energy_corr_factor_high, n_times))
+  
+  counts = counts_in
+  counts_error = counts_in_error
+  
+  counts[energy_ind[0],*,*,*]        *= energy_corr_factor_low
+  counts[energy_ind[-1],*,*,*]       *= energy_corr_factor_high
+  counts_error[energy_ind[0],*,*,*]  *= energy_corr_factor_low
+  counts_error[energy_ind[-1],*,*,*] *= energy_corr_factor_high
+  
+  counts       = total(counts[energy_ind,*,*,*],1)
+  counts_error = sqrt(total(counts_error[energy_ind,*,*,*]^2.,1))
 
   ;; Compute total number of counts AFTER ELUT correction is applied. It is used for estimating the amount of the ELUT correction
-  counts_reshaped = reform(counts, 4, 3, 32)
-  counts_elut = reform(counts_reshaped[*,pixel_ind,subc_index])
+  counts_reshaped = reform(counts, 4, 3, 32, n_times)
+  counts_elut = reform(counts_reshaped[*,pixel_ind,subc_index,*])
 
 endelse
 
 return, {counts: counts, $
          counts_error: counts_error, $
          counts_no_elut: counts_no_elut, $
-         counts_elut: counts_elut}
+         counts_elut: counts_elut, $
+         sp_index: sp_index}
 
 
 end

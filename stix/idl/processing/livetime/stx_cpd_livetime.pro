@@ -21,8 +21,14 @@
 ; OUTPUTS:
 ; 
 ;   Structure containing:
-;   - LIVE_TIME_BINS: array (dimensions: 32 × number of time bins) containing the live time value for each time bin in the CPD file
-;   - LIVE_TIME_BINS_ERR: array (dimensions: 32 × number of time bins) containing the uncertainty on the live time value for each time bin in the CPD file
+;   - LIVE_TIME_BINS: array (dimensions: 32 × number of time bins) containing the live time value 
+;                     for each time bin in the CPD file
+;   - LIVE_TIME_BINS_ERR: array (dimensions: 32 × number of time bins) containing the uncertainty on 
+;                         the live time value for each time bin in the CPD file
+;   - LIVETIME_FRACTION: array (dimensions: 32 × number of time bins) containing the value of 
+;                        the live time fraction for each time bin in the CPD file
+;   - LIVETIME_FRACTION_ERR: array (dimensions: 32 × number of time bins) containing the uncertainty on
+;                        the live time fraction for each time bin in the CPD file
 ;
 ; HISTORY: 
 ;   May 2025, Massa P. (FHNW), first release
@@ -46,6 +52,8 @@ function stx_cpd_livetime, triggers, triggers_err, t_axis
   live_time_bins_err = livetime_fraction_err * duration_time_bins
 
   return, {live_time_bins: live_time_bins,$
-           live_time_bins_err: live_time_bins_err}
+           live_time_bins_err: live_time_bins_err,$
+           livetime_fraction: livetime_fraction, $
+           livetime_fraction_err: livetime_fraction_err}
 
 end

@@ -402,8 +402,8 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
     spectrum = total(total(counts[*,0:7,subc_index], 3), 2) / (energy_high - energy_low)
     elut_data = stx_elut_correction(counts, counts_error, $
                               energy_bin_idx, energy_bin_low, energy_bin_high, energy_high, energy_low, energy_ind, this_energy_range, $
-                              spectrum, spectrum_with_bkg, spectrum_bkg, $
-                              pixel_ind, subc_index, silent=silent)
+                              spectrum, pixel_ind, subc_index, $
+                              spectrum_with_bkg=spectrum_with_bkg, spectrum_bkg=spectrum_bkg,silent=silent)
     
     counts = elut_data.COUNTS
     counts_error = elut_data.COUNTS_ERROR

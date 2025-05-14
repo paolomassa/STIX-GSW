@@ -44,6 +44,7 @@
 ;       03-Dec-2018 - ECMD  (Graz), include information for multiple attenuation states
 ;       23-Feb-2022 - ECMD  (Graz), added information of xspec compatibility and time shift to files
 ;       08-Aug-2022 - ECMD  (Graz), can now pass in structure of info parameters to write in FITS file
+;       14-May-2025 - MASSA P. (FHNW), removed GRID_FACTOR from header
 ;
 ;-
 pro stx_write_ospex_fits, $
@@ -164,14 +165,12 @@ pro stx_write_ospex_fits, $
 
   fxaddpar, specheader, 'REQUEST_ID', fits_info_params.uid, "Unique Request ID for the Observation", before='AUTHOR'
   fxaddpar, specheader, 'SUN_DISTANCE', fits_info_params.distance, "Distance in AU to Sun", before='AUTHOR'
-  fxaddpar, specheader, 'GRID_FACTOR', ((fits_info_params.grid_factor.toarray())[0]), "Total Grid Transmission Factor", before='AUTHOR'
   fxaddpar, specheader, 'ELUT_FILENAME', fits_info_params.elut_file, "Filename of ELUT", before='AUTHOR'
   fxaddpar, specheader, 'DETUSED', fits_info_params.detused, "Label for detectors used", before='AUTHOR'
   fxaddpar, specheader, 'DETNAM', fits_info_params.detused, "Label for detectors used", before='AUTHOR'
   fxaddpar, specheader, 'SUMFLAG', 1, "Detectors are summed", before='AUTHOR'
   
   fxaddpar, srmheader, 'SUN_DISTANCE', fits_info_params.distance, "Distance in AU to Sun", before='AUTHOR'
-  fxaddpar, srmheader, 'GRID_FACTOR', ((fits_info_params.grid_factor.toarray())[0]), "Total Grid Transmission Factor used", before='AUTHOR'
   fxaddpar, srmheader, 'DETUSED', fits_info_params.detused, "Label for detectors used", before='AUTHOR'
   fxaddpar, srmheader, 'DETNAM', fits_info_params.detused, "Label for detectors used", before='AUTHOR'
   fxaddpar, srmheader, 'SUMFLAG', 1, "Detectors are summed", before='AUTHOR'

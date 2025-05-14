@@ -34,12 +34,6 @@
 ;               Shift all energies by this value in keV. Rarely needed only for cases where there is a significant shift
 ;               in calibration before a new ELUT can be uploaded.
 ;
-;    flare_location_hpc : in, type="2 element float array"
-;               the location of the flare (X,Y) in Helioprojective Cartesian coordinates as seen from Solar Orbiter [arcsec]
-;
-;    aux_fits_file : in, required if flare_location_hpc is passed in, type="string"
-;                the path of the auxiliary ephemeris FITS file to be read."
-;               
 ;    det_ind : in, type="int array", default="all detectors  present in observation"
 ;              indices of detectors to sum when making spectrogram
 ;
@@ -63,12 +57,9 @@
 ;
 ;    srmfile : in, type="string", default="'stx_srm_'+ UID + '.fits'"
 ;                    File name to use when saving the srm FITS file for OSPEX input.
-;                    
+;
 ;    silent : in, type="int", default="0"
 ;             If set prevents informational messages being displayed.
-;             
-;    background_data : out, type="stx_background_data structure"
-;                     Structure containing the subtracted background for external plotting.
 ;
 ;    plot : in, type="boolean", default="1"
 ;                     If set open OSPEX GUI and plot lightcurve in standard quicklook energy bands
@@ -78,6 +69,10 @@
 ;                     If set, generate SRM file compatible with XSPEC rather than OSPEX.
 ;
 ;    ospex_obj : out, type="OSPEX object"
+;    
+;    delta_time_min: in, type="float". Pixel data counts are rebinned in time in such a way that the 
+;                    time resolution is at least equal to delta_time_min (defined in seconds).
+;                    Rebinned data are used to construct spectra needed for the ELUT correction.
 ;
 ;
 ; :examples:
@@ -99,28 +94,33 @@
 ;    16-Jun-2023 - ECMD (Graz), for a source location dependent response estimate, the location in HPC and the auxiliary ephemeris file must be provided.
 ;    06-Dec-2023 - ECMD (Graz), added silent keyword, more information is now printed if not set
 ;    2024-07-12, F. Schuller (AIP): added optional keyword xspec
+;    07-May-2025 - Stiefel M. and Massa P., re-implemented to take into account new ELUT correction, new subcollimator transmission and live time normalization
 ;
 ;-
 pro  stx_convert_pixel_data, fits_path_data = fits_path_data, fits_path_bk = fits_path_bk, $
   time_shift = time_shift, energy_shift = energy_shift, distance = distance, $
-  aux_fits_file = aux_fits_file, flare_location_hpc = flare_location_hpc, flare_location_stx = flare_location_stx, $
-  det_ind = det_ind, pix_ind = pix_ind, elut_correction = elut_correction, shift_duration = shift_duration, $
+  flare_location_stx = flare_location_stx, det_ind = det_ind, pix_ind = pix_ind, elut_correction = elut_correction, shift_duration = shift_duration, $
   no_attenuation = no_attenuation, sys_uncert = sys_uncert, generate_fits = generate_fits, specfile = specfile, $
-  srmfile = srmfile, silent = silent, background_data = background_data, plot = plot, xspec=xspec, ospex_obj = ospex_obj
+  srmfile = srmfile, silent = silent, plot = plot, xspec=xspec, ospex_obj = ospex_obj, $
+  delta_time_min = delta_time_min, tailing=tailing, include_damage=include_damage, _extra=extra
 
   default, shift_duration, 0
   default, plot, 1
   default, det_ind, 'top24'
-  default, elut_correction, 1 
+  default, elut_correction, 1
   default, silent, 0
   default, xspec, 0
+  default, sys_uncert, 0.05
+  default, delta_time_min, 20.
+  default, tailing, 1
+  default, include_damage, 1
 
   if n_elements(time_shift) eq 0 then begin
-  if ~keyword_set(silent) then begin
-    message, 'Time shift value not set, using default value of 0 [s].', /info
-    print, 'File averaged values can be obtained from the FITS file header'
-    print, 'using stx_get_header_corrections.pro.'
-  endif
+    if ~keyword_set(silent) then begin
+      message, 'Time shift value not set, using default value of 0 [s].', /info
+      print, 'File averaged values can be obtained from the FITS file header'
+      print, 'using stx_get_header_corrections.pro.'
+    endif
     time_shift = 0.
   endif
 
@@ -138,20 +138,59 @@ pro  stx_convert_pixel_data, fits_path_data = fits_path_data, fits_path_bk = fit
   mask_use_pixels = intarr(12)
   if n_elements(pix_ind) eq 0 then mask_use_pixels[*] = 1 else mask_use_pixels[pix_ind] = 1
 
-
+  ;;***************** READ SCIENCE AND BKG DATA
+  
   stx_read_pixel_data_fits_file, fits_path_data, time_shift, primary_header = primary_header, data_str = data_str, data_header = data_header, control_str = control_str, $
     control_header= control_header, energy_str = energy_str, energy_header = energy_header, t_axis = t_axis, energy_shift = energy_shift,  e_axis = e_axis , use_discriminators = 0, $
     shift_duration = shift_duration, silent=silent
+    
+  ;; Select indices of the energy bins (among the 32) that are actually present in the pixel data science file
+  energy_bin_mask = data_str.energy_bin_mask
+  energy_bin_idx  = where(energy_bin_mask eq 1)
 
-  data_level = 1
+  energy_low  = e_axis.LOW
+  energy_high = e_axis.HIGH
 
-  start_time = atime(stx_time2any((t_axis.time_start)[0]))
+  energy_min = min(energy_low)
+  energy_max = max(energy_high)
+    
+  ;; Read BKG data
+  if keyword_set(fits_path_bk) then begin
 
-  elut_filename = stx_date2elut_file(start_time)
- 
-  if ~keyword_set(silent) then begin
-        print, 'Using ELUT file ' + elut_filename
+    stx_read_pixel_data_fits_file, fits_path_bk, data_str = data_bkg, t_axis = t_axis_bkg, e_axis = e_axis_bkg, _extra=extra 
+
+    if n_elements(t_axis_bkg.DURATION) gt 1 then message, 'The chosen file does not contain a background measurement'
+    
+    ;; Select indices of the energy bins (among the 32) that are actually present in the pixel data bkg file
+    energy_bin_mask_bkg = data_bkg.energy_bin_mask
+    energy_bin_idx_bkg = where(energy_bin_mask_bkg eq 1)
+
+    energy_low_bkg  = e_axis_bkg.LOW
+    energy_high_bkg = e_axis_bkg.HIGH
+    
+    ;; Extract energy range in common between science and background file
+    energy_min = max([energy_min,min(energy_low_bkg)])
+    energy_max = min([energy_max,max(energy_high_bkg)])
+    idx_energy_bkg = where((energy_low_bkg ge energy_min) and (energy_high_bkg le energy_max))
+
+    energy_bin_idx_bkg = energy_bin_idx_bkg[idx_energy_bkg]
+    energy_low_bkg = energy_low_bkg[idx_energy_bkg]
+    energy_high_bkg = energy_high_bkg[idx_energy_bkg]
+
   endif
+  
+  ;; Extract energy range in common between science and background file
+  idx_energy = where((energy_low ge energy_min) and (energy_high le energy_max))
+
+  energy_bin_idx = energy_bin_idx[idx_energy]
+  energy_low = energy_low[idx_energy]
+  energy_high = energy_high[idx_energy]
+  
+  ct_edges = get_uniq( [energy_low,energy_high],epsilon=0.0001) 
+  
+  ;;***************** READ FITS INFO PARAMS
+  
+  data_level = 1
   
   uid = control_str.request_id
 
@@ -160,10 +199,13 @@ pro  stx_convert_pixel_data, fits_path_data = fits_path_data, fits_path_bk = fit
   fits_info_params = stx_fits_info_params( fits_path_data = fits_path_data, data_level = data_level, $
     distance = fits_distance, time_shift = time_shift, fits_path_bk = fits_path_bk, uid = uid, $
     generate_fits = generate_fits, specfile = specfile, srmfile = srmfile, elut_file = elut_filename, silent = silent)
-
-  counts_in = data_str.counts
-
-  dim_counts = counts_in.dim
+    
+  ;;***************** CHECK FOR POTENTIAL PIXEL SHADOWING
+  
+  counts = data_str.COUNTS
+  counts_error = data_str.COUNTS_ERR 
+  
+  dim_counts = counts.dim
 
   n_times = n_elements(dim_counts) gt 3 ? dim_counts[3] : 1
 
@@ -183,7 +225,6 @@ pro  stx_convert_pixel_data, fits_path_data = fits_path_data, fits_path_bk = fit
 
   endelse
 
-
   pixel_mask_used = intarr(12)
   pixel_mask_used[pixels_used] = 1
   n_pixels = total(pixel_mask_used)
@@ -191,95 +232,348 @@ pro  stx_convert_pixel_data, fits_path_data = fits_path_data, fits_path_bk = fit
   detector_mask_used = intarr(32)
   detector_mask_used[detectors_used]  = 1
   n_detectors = total(detector_mask_used)
-
-  if ~keyword_set(silent) then begin
-  if total(pixel_mask_used[0:3]) eq total(pixel_mask_used[4:7]) then begin
-    count_ratio_threshold = 1.05
-    counts_top = total(counts_in[1:25,0:3,detectors_used,*])
-    counts_bottom = total(counts_in[1:25,4:7,detectors_used,*])
-    case 1 of
-      f_div(counts_top, counts_bottom, default = 2) gt count_ratio_threshold : message, 'Top pixel total 5% higher than bottom row. Possible pixel shadowing. Recommend using only top pixels for analysis.',/info
-      f_div(counts_bottom, counts_top, default = 2) gt count_ratio_threshold : message, 'Bottom pixel total 5% higher than top row. Possible pixel shadowing. Recommend using only bottom pixels for analysis.',/info
-      else:
-    endcase
-  endif
-  endif 
-
-
-  counts_in = reform(counts_in,[dim_counts[0:2], n_times])
-
-  spec_in = total(reform(counts_in[*,pixels_used,detectors_used,*],[32,n_pixels,n_detectors,n_times]),2)
-
-  spec_in = reform(spec_in,[dim_counts[0],n_detectors, n_times])
-
-  counts_spec =  spec_in[energy_bins,*, *]
-
-  counts_spec =  reform(counts_spec,[n_energies, n_detectors, n_times])
-
-  counts_err = reform(data_str.counts_err,[dim_counts[0:2], n_times])
-
-  counts_err = sqrt(total(reform(counts_err[*,pixels_used,detectors_used,*]^2.,[32,n_pixels,n_detectors,n_times]),2))
-
-  counts_err = reform(counts_err,[dim_counts[0],n_detectors, n_times])
-
-  counts_err =  counts_err[energy_bins,*, *]
   
-  counts_err =  reform(counts_err,[n_energies, n_detectors, n_times])
+  ;; Check if the top or bottom row of pixels is not fully-illuminated
+  if ~keyword_set(silent) then begin
+    if total(pixel_mask_used[0:3]) eq total(pixel_mask_used[4:7]) then begin
+      count_ratio_threshold = 1.05
+      counts_top = total(counts[1:25,0:3,detectors_used,*])
+      counts_bottom = total(counts[1:25,4:7,detectors_used,*])
+      case 1 of
+        f_div(counts_top, counts_bottom, default = 2) gt count_ratio_threshold : message, 'Top pixel total 5% higher than bottom row. Possible pixel shadowing. Recommend using only top pixels for analysis.',/info
+        f_div(counts_bottom, counts_top, default = 2) gt count_ratio_threshold : message, 'Bottom pixel total 5% higher than top row. Possible pixel shadowing. Recommend using only bottom pixels for analysis.',/info
+        else:
+      endcase
+    endif
+  endif
+  
+  ;;***************** Compute count rates (normalize by livetime)
+  
+  counts = counts[energy_bin_idx,*,*,*]
+  counts_error = counts_error[energy_bin_idx,*,*,*]
+  
+  if keyword_set(fits_path_bk) then begin
 
-  triggers =  transpose(reform(data_str.triggers,[16, n_times]))
+    ;; Check if science and background files are reconrded with the same ELUT
+    elut_filename = stx_date2elut_file(stx_time2any(t_axis.TIME_START[0]))
+    stx_read_elut, elut_gain, elut_offset, adc4096_str, elut_filename = elut_filename
 
-  triggers_err =  transpose(reform(data_str.triggers_err,[16, n_times]))
+    elut_filename_bkg = stx_date2elut_file(stx_time2any(t_axis_bkg.TIME_START))
+    stx_read_elut, ekev_actual = ekev_actual_bkg, elut_filename = elut_filename_bkg
+
+    ;; Compare ELUT tables
+    elut_comp = STRCMP(elut_filename, elut_filename_bkg)
+
+    if not elut_comp then $
+      message, 'The background file must be recorded when the same ELUT as the science file was uploaded. Please choose a different background file that is closer in time to the science file.'
+
+    counts_bkg       = data_bkg.COUNTS
+    counts_error_bkg = data_bkg.COUNTS_ERR
+    counts_bkg       = counts_bkg[energy_bin_idx_bkg,*,*]
+    counts_error_bkg = counts_error_bkg[energy_bin_idx_bkg,*,*]
+
+  endif else begin
+
+    counts_bkg       = dblarr(size(counts, /dim))
+    counts_error_bkg = dblarr(size(counts, /dim))
+
+  endelse
+  
+  ;; Compute live time
+  live_time_data = stx_cpd_livetime(data_str.TRIGGERS, data_str.TRIGGERS_ERR, t_axis)
+  live_time_bins = live_time_data.LIVE_TIME_BINS
+  live_time_bins_error = live_time_data.LIVE_TIME_BINS_ERR
+  live_time_fraction_bins = live_time_data.LIVETIME_FRACTION
+  
+  live_time_bins_rep = transpose(cmreplicate(live_time_bins, [n_elements(energy_bin_idx),12]), [2,3,0,1])
+  live_time_bins_error_rep = transpose(cmreplicate(live_time_bins_error, [n_elements(energy_bin_idx),12]), [2,3,0,1])
+  
+  if keyword_set(fits_path_bk) then begin
+
+    live_time_bkg_data = stx_cpd_livetime(data_bkg.TRIGGERS, data_bkg.TRIGGERS_ERR, t_axis_bkg)
+    live_time_bkg = live_time_bkg_data.LIVE_TIME_BINS
+    live_time_error_bkg = live_time_bkg_data.LIVE_TIME_BINS_ERR
+
+  endif else begin
+
+    live_time_bkg = dblarr(32) + 1.
+    live_time_error_bkg = dblarr(32)
+
+  endelse
+  
+  live_time_bkg_rep = transpose(cmreplicate(live_time_bkg, [n_elements(energy_bin_idx),12]), [1,2,0])
+  live_time_error_bkg_rep = transpose(cmreplicate(live_time_error_bkg, [n_elements(energy_bin_idx),12]), [1,2,0]) 
+  
+  ;; Normalize by livetime
+  count_rates = f_div( counts, live_time_bins_rep )
+  count_rates_error = count_rates * sqrt( f_div( counts_error, counts )^2. + f_div( live_time_bins_error_rep, live_time_bins_rep )^2. )
+  
+  count_rates_bkg = f_div( counts_bkg, live_time_bkg_rep )
+  count_rates_bkg_error = count_rates_bkg * sqrt( f_div( counts_error_bkg, counts_bkg )^2. + f_div( live_time_error_bkg_rep, live_time_bkg_rep )^2. )
+  
+  if n_times gt 1 then begin
+    
+    count_rates_bkg = cmreplicate( count_rates_bkg, n_times);[1,n_times] )
+    count_rates_bkg_error = cmreplicate( count_rates_bkg_error, n_times);[1,n_times] )
+    
+  endif 
+  
+  ;; Apply BKG subtraction
+  count_rates = count_rates - count_rates_bkg
+  count_rates_error = sqrt( count_rates_error^2. + count_rates_bkg_error^2. )
+  
+  ;;***************** APPLY TRANSMISSION CORRECTION
+  
+  ;; Correct BKG detector. For now, nominal transmission values are used. Muriel's future PR will fix this.
+  grid_transmission_file =  concat_dir(getenv('STX_GRID'), 'nom_bkg_grid_transmission.txt')
+  readcol, grid_transmission_file, bk_grid_factors, format = 'f', skip = 2, silent = silent
+  
+  bk_grid_factors_rep = cmreplicate(bk_grid_factors, [n_elements(energy_bin_idx), n_times])
+  bk_grid_factors_rep = transpose(bk_grid_factors_rep, [1,0,2])
+  
+  count_rates[*,*,9,*] = f_div( reform(count_rates[*,*,9,*]), bk_grid_factors_rep )
+  count_rates_error[*,*,9,*] = f_div( reform(count_rates_error[*,*,9,*]), bk_grid_factors_rep )
+  
+  ;; Correct imaging detectors
+  if keyword_set(flare_location_stx) then begin
+    
+    subc_transmission = stx_subc_transmission(flare_location_stx)
+    
+  endif else begin
+    ;; If flare location is not provided, then use on-axis transmission
+    subc_transmission = stx_subc_transmission([0.,0.])
+    
+  endelse
+  
+  for i=0,31 do begin
+    
+    if ((i ne 8) and (i ne 9)) then begin
+      
+      this_transmission_rep = cmreplicate(subc_transmission[i], [n_elements(energy_bin_idx), 12, n_times])
+      
+      count_rates[*,*,i,*] = f_div( reform(count_rates[*,*,i,*]), this_transmission_rep )
+      count_rates_error[*,*,i,*] = f_div( reform(count_rates_error[*,*,i,*]), this_transmission_rep )
+      
+    endif
+    
+  endfor
+  
+  ;;***************** APPLY ELUT CORRECTION 
+  
+  if (total(pixel_mask_used[0:3]) gt 0.) and (total(pixel_mask_used[4:7]) gt 0.) $
+    and (total(pixel_mask_used[8:11]) gt 0.) then sumcase = 'ALL'
+    
+  if (total(pixel_mask_used[0:3]) gt 0.) and (total(pixel_mask_used[4:7]) gt 0.) $
+    and (total(pixel_mask_used[8:11]) eq 0.) then sumcase = 'TOP+BOT'
+    
+  if (total(pixel_mask_used[0:3]) gt 0.) and (total(pixel_mask_used[4:7]) eq 0.) $
+    and (total(pixel_mask_used[8:11]) eq 0.) then sumcase = 'TOP'
+  
+  if (total(pixel_mask_used[0:3]) eq 0.) and (total(pixel_mask_used[4:7]) gt 0.) $
+    and (total(pixel_mask_used[8:11]) eq 0.) then sumcase = 'BOT'
+    
+  if (total(pixel_mask_used[0:3]) eq 0.) and (total(pixel_mask_used[4:7]) eq 0.) $
+    and (total(pixel_mask_used[8:11]) gt 0.) then sumcase = 'SMALL'
+  
+  case sumcase of
+
+    'TOP':     begin
+      pixel_ind = [0]
+    end
+
+    'BOT':     begin
+      pixel_ind = [1]
+    end
+
+    'TOP+BOT': begin
+      pixel_ind = [0,1]
+    end
+
+    'ALL': begin
+      pixel_ind = [0,1,2]
+    end
+
+    'SMALL': begin
+      pixel_ind = [2]
+    end
+  end
+  
+  
+  
+  if elut_correction then begin
+  
+    ; Rebin counts in time. From stx_science_data_lightcurve:
+    ; determine time bins with minimum duration - keep adding consecutive bins until the minimum
+    ; value is at least reached
+    
+    duration = t_axis.DURATION
+    
+    i=0
+    j=0
+    total_time=0
+    iall=[]
+  
+    while (i lt n_elements(duration)-1) do begin
+      while (total_time lt delta_time_min)  and (i+j le n_elements(duration)-1) do begin
+        total_time = total(duration[i:i+j])
+        j++
+      endwhile
+      iall = [iall,i]
+      i = i+j
+      j = 0
+      total_time = 0
+    endwhile
+    
+    idx_time_min = iall[0:-2]
+    idx_time_max = iall[1:-1]-1
+    
+    ;; Create daily ELUT
+    daily_elut = stx_create_daily_elut(stx_time2any(t_axis.TIME_START[0]),  _extra=extra)
+    energy_bin_low = daily_elut.ENERGY_BIN_LOW
+    energy_bin_high = daily_elut.ENERGY_BIN_HIGH
+  
+    energy_bin_low  = energy_bin_low[energy_bin_idx,*,*]
+    energy_bin_high = energy_bin_high[energy_bin_idx,*,*]
+    
+    
+    count_rates_elut = fltarr(count_rates.dim)
+    count_rates_error_elut = fltarr(count_rates_error.dim)
+    
+    n_times_rebinned = n_elements(idx_time_min)
+    
+    for t_bin = 0,n_times_rebinned-1 do begin
+      
+      this_count_rates = reform(count_rates[*,*,*,idx_time_min[t_bin]:idx_time_max[t_bin]])
+      this_count_rates_error = reform(count_rates_error[*,*,*,idx_time_min[t_bin]:idx_time_max[t_bin]])
+      
+      if idx_time_max[t_bin]-idx_time_min[t_bin] ge 1 then begin
+        
+        rebinned_count_rates = average(this_count_rates, 4)
+        
+      endif else begin
+      
+        rebinned_count_rates = this_count_rates
+      
+      endelse
+      
+      if n_elements(pixels_used) gt 1 then begin
+        
+        spectrum = total(rebinned_count_rates[*,pixels_used,*], 2)
+      
+      endif else begin
+        
+        spectrum = reform(rebinned_count_rates[*,pixels_used,*])
+        
+      endelse
+      
+      if n_elements(detectors_used) gt 1 then begin
+
+        spectrum = total(spectrum[*,detectors_used], 2)
+
+      endif else begin
+
+        spectrum = reform(spectrum[*,detectors_used])
+
+      endelse
+      
+      spectrum = spectrum / (energy_high - energy_low)
+      
+      ;; Apply ELUT correction 
+      for e_bin=0,n_elements(idx_energy)-1 do begin
+        
+        this_energy_range = [energy_low[e_bin], energy_high[e_bin]]
+        
+        elut_data = stx_elut_correction(this_count_rates, this_count_rates_error, $
+                                        energy_bin_idx, energy_bin_low, energy_bin_high, energy_high, energy_low, e_bin, this_energy_range, $
+                                        spectrum, pixel_ind, det_ind, /silent)
+                                        
+         count_rates_elut[e_bin,*,*,idx_time_min[t_bin]:idx_time_max[t_bin]] = elut_data.COUNTS
+         count_rates_error_elut[e_bin,*,*,idx_time_min[t_bin]:idx_time_max[t_bin]] = elut_data.COUNTS_ERROR                            
+      
+      endfor   
+      
+      ;; Apply slat transparency correction
+      sp_index = elut_data.SP_INDEX
+
+      if keyword_set(flare_location_stx) then begin
+
+        slat_transparency_correction_factor = stx_slat_transparency_correction(ct_edges, flare_location_stx, sp_index=sp_index, subc_index=stx_label2det_ind('ALL'))
+
+      endif else begin
+
+        slat_transparency_correction_factor = stx_slat_transparency_correction(ct_edges, [0.,0.], sp_index=sp_index, subc_index=stx_label2det_ind('ALL'))
+
+      endelse
+      ;; Ad hoc correction for CFL and BKG: we do not compute tungsten transparency
+      slat_transparency_correction_factor[8:9,*] = 1.
+
+      n_time_bins = idx_time_max[t_bin]-idx_time_min[t_bin] + 1
+
+      if n_time_bins gt 1 then begin
+
+        slat_transparency_correction_factor = transpose(cmreplicate(slat_transparency_correction_factor, [12,n_time_bins]), [1,2,0,3]) 
+        count_rates_elut[*,*,*,idx_time_min[t_bin]:idx_time_max[t_bin]] /= slat_transparency_correction_factor
+        count_rates_error_elut[*,*,*,idx_time_min[t_bin]:idx_time_max[t_bin]] /= slat_transparency_correction_factor
+        
+      endif else begin
+        
+        slat_transparency_correction_factor = transpose(cmreplicate(slat_transparency_correction_factor, 12), [1,2,0]) 
+        count_rates_elut[*,*,*,idx_time_min[t_bin]:idx_time_max[t_bin]] /= slat_transparency_correction_factor
+        count_rates_error_elut[*,*,*,idx_time_min[t_bin]:idx_time_max[t_bin]] /= slat_transparency_correction_factor
+        
+      endelse
+
+    endfor
+    
+  count_rates = count_rates_elut
+  count_rates_error = count_rates_error_elut
+  
+  endif
+  
+  ;;***************** CREATE SPECTROGRAM
+  
+  if n_elements(pixels_used) gt 1 then begin
+
+    spec = total(count_rates[*,pixels_used,*,*], 2)
+    spec_error = sqrt(total(count_rates_error[*,pixels_used,*,*]^2., 2))
+
+  endif else begin
+
+    spec = reform(count_rates[*,pixels_used,*,*])
+    spec_error = reform(count_rates_error[*,pixels_used,*,*])
+
+  endelse
+
+  if n_elements(detectors_used) gt 1 then begin
+
+    spec = total(spec[*,detectors_used,*], 2)
+    spec_error = sqrt(total(spec_error[*,detectors_used,*]^2., 2))
+
+  endif else begin
+
+    spec = reform(spec[*,detectors_used,*])
+    spec_error = reform(spec_error[*,detectors_used,*])
+
+  endelse
+  
+  ;; Compute average livetime and livetime fraction
+  avg_live_time_bins = average(live_time_bins[detectors_used,*], 1)
+  avg_live_time_fraction_bins = average(live_time_fraction_bins[detectors_used,*], 1)
+  
+  ;; Multiply by average live time. The units of the spectrogram are counts
+  avg_live_time_bins_rep = transpose(cmreplicate(avg_live_time_bins, n_elements(energy_bin_idx)))
+  
+  spec *= avg_live_time_bins_rep
+  spec_error *= avg_live_time_bins_rep
+  
+  ;;***************** CHECK FOR RCR CHANGES
 
   rcr = data_str.rcr
-  
- if keyword_set(elut_correction) then begin
-
-
-  stx_read_elut, ekev_actual = ekev_actual, elut_filename = elut_filename
-
-  ave_edge  = mean(reform(ekev_actual[energy_edges_used-1, pixels_used, detectors_used, 0 ],n_energy_edges, n_pixels, n_detectors), dim= 2)
-  ave_edge  = mean(reform(ave_edge,n_energy_edges, n_detectors), dim= 2)
-
-  edge_products, ave_edge, width = ewidth
-
-  eff_ewidth =  (e_axis.width)/ewidth
-
-
-  counts_spec =  counts_spec * reform(reproduce(eff_ewidth, n_detectors*n_times),n_energies, n_detectors, n_times)
-
-  counts_spec =  reform(counts_spec,[n_energies, n_detectors, n_times])
-
-
-  counts_err =  counts_err * reform(reproduce(eff_ewidth, n_detectors*n_times),n_energies, n_detectors, n_times)
-
-  counts_err =  reform(counts_err,[n_energies, n_detectors, n_times])
-  
-  endif
-
-  ;insert the information from the telemetry file into the expected stx_fsw_sd_spectrogram structure
-  spectrogram = { $
-    type          : "stx_fsw_sd_spectrogram", $
-    counts        : counts_spec, $
-    trigger       : triggers, $
-    trigger_err   : triggers_err, $
-    time_axis     : t_axis , $
-    energy_axis   : e_axis, $
-    pixel_mask    : pixel_mask_used , $
-    detector_mask : detector_mask_used, $
-    rcr           : rcr, $
-    error         : counts_err}
-
-  data_dims = lonarr(4)
-  data_dims[0] = n_energies
-  data_dims[1] = n_detectors
-  data_dims[2] = n_pixels
-  data_dims[3] = n_times
 
   ;get the rcr states and the times of rcr changes from the ql_lightcurves structure
   ut_rcr = stx_time2any(t_axis.time_end)
 
   find_changes, rcr, index, state, count=count
-
   ; ************************************************************
   ; ******************** TEMPORARY FIX *************************
   ; ***** Andrea: 2022-April-05
@@ -295,7 +589,7 @@ pro  stx_convert_pixel_data, fits_path_data = fits_path_data, fits_path_bk = fit
   endif
   ; ************************************************************
   ; ************************************************************
-
+  
   ; ******************** TEMPORARY FIX *************************
   ; ***** ECMD: 2022-Jun-27
   ; As the reported time of the RCR status change can be inaccurate
@@ -304,7 +598,7 @@ pro  stx_convert_pixel_data, fits_path_data = fits_path_data, fits_path_bk = fit
   ; find all time intervals where the difference between adjacent bins is large
   if max(rcr) gt 0 then begin; skip if in the standard state of RCR0 for the full time range
 
-    jumps = where(abs((total(counts_spec,2))[2,*] - shift((total(counts_spec,2))[2,*],-1)) gt 1e4)
+    jumps = where(abs(total(spec,1) - shift(total(spec,1),-1)) gt 1e4)
     ; include the starting bin
     jumps = [0, jumps]
     ; as the attenuator motion can be present in two consecutive bins select only the first
@@ -316,16 +610,130 @@ pro  stx_convert_pixel_data, fits_path_data = fits_path_data, fits_path_bk = fit
     index = jumps_use[closest_jumps]
 
   endif
-  ; ************************************************************
-
+  
   ;add the rcr information to a specpar structure so it can be included in the spectrum FITS file
   specpar = { sp_atten_state :  {time:ut_rcr[index], state:state}, flare_xyoffset : fltarr(2), use_flare_xyoffset:0 }
+  
+  ;;***************** CREATE SRM
+  
+  pixel_mask =detector_mask_used ## pixel_mask_used
+  
+  transmission = read_csv(loc_file( 'stix_transmission_by_component_highres_20240711_010-100eVBin.csv', path = getenv('STX_GRID')))
 
-  stx_convert_science_data2ospex, spectrogram = spectrogram, specpar=specpar, time_shift = time_shift, $
-    data_level = data_level, data_dims = data_dims, fits_path_bk = fits_path_bk, fits_path_data = fits_path_data,$
-    aux_fits_file = aux_fits_file, flare_location_hpc = flare_location_hpc, flare_location_stx = flare_location_stx, $
-    eff_ewidth = eff_ewidth, sys_uncert = sys_uncert, plot = plot, background_data = background_data, silent = silent, $
-    elut_correction = elut_correction, fits_info_params = fits_info_params, xspec=xspec, ospex_obj = ospex_obj
+  emin = 1
+  emax = 150
+  phe = transmission.field9
+  phe = phe[where(phe gt emin-1 and phe lt 2*emax)]
+  edge_products, phe, mean = mean_phe, width = w_phe
+  ph_edges = [mean_phe[0] - w_phe[0], mean_phe]
+  
+  distance = fits_info_params.distance
+  dist_factor = 1./(distance^2.)
+  
+  ;make the srm for the appropriate pixel mask and energy edges
+  ;srm = stx_build_pixel_drm(ct_edges, pixel_mask,  ph_energy_edges = ph_edges, dist_factor = dist_factor, tailing = tailing, include_damage = include_damage, _extra=extra)
+  ph_edges =  get_uniq( [ph_edges,ct_edges],epsilon=0.0001)
+  
+  ;; Creates appropriate SRM for different attenuator states 
+  rcr_states = specpar.sp_atten_state.state  
+  rcr_states = rcr_states[uniq(rcr_states, sort(rcr_states))]
+  nrcr_states = n_elements(rcr_states)
+
+  srm_atten = replicate( {rcr:0,  srm:fltarr(n_elements(ct_edges)-1,n_elements(ph_edges)-1)},nrcr_states )
+
+  for i =0,  nrcr_states-1 do begin
+    ;make the srm for the appropriate pixel mask and energy edges
+    rcr = rcr_states[i]
+
+    srm = stx_build_pixel_drm(ct_edges, pixel_mask, rcr = rcr, ph_energy_edges = ph_edges, dist_factor = dist_factor, tailing = tailing, include_damage = include_damage, _extra=extra)
+    srm_atten[i].srm = srm.smatrix
+    srm_atten[i].rcr = rcr
+
+  endfor
+
+  ;;***************** SAVE FITS
+  detector_label = stx_det_mask2label(detector_mask_used)
+  pixel_label = stx_pix_mask2label(pixel_mask_used)
+  
+  ospex_obj  = ospex(/no)
+  
+  ;if the fits keyword is set write the spectrogram and srm data to fits files and then read them in to the ospex object
+  if fits_info_params.generate_fits eq 1 then begin
+    utime = transpose([stx_time2any( t_axis.time_start )])
+
+    ;spectrogram structure for passing to fits writer routine
+    spectrum_in = { type              : 'stx_spectrogram', $
+      data              : spec, $
+      t_axis            : t_axis, $
+      e_axis            : e_axis, $
+      ltime             : avg_live_time_fraction_bins, $
+      attenuator_state  : data_str.rcr , $
+      error             : spec_error }
+    
+    specfilename = fits_info_params.specfile
+    srmfilename =  fits_info_params.srmfile
+    
+    ;fits_info_params.grid_factor.add, grid_factor
+    fits_info_params.detused = detector_label + ', Pixels: ' + pixel_label
+    
+    if keyword_set(xspec) then begin
+      ;xspec in general works with energy depandent systematic errors
+      e_axis = spectrum_in.e_axis
+      n_energies = n_elements(e_axis.mean)
+      sys_err  = fltarr(n_energies)
+
+      idx_below10kev = where(e_axis.mean lt 10, cb10)
+      sys_err[*] = 0.03
+      if cb10 gt 0 then sys_err[idx_below10kev] = 0.05
+      idx_below7kev = where(e_axis.mean lt 7, cb7)
+      if cb7 gt 0 then sys_err[idx_below7kev] = 0.07
+      
+      sys_err = rebin(sys_err, n_energies,n_times)
+    endif
+
+    stx_write_ospex_fits, spectrum = spectrum_in, srmdata = srm, specpar = specpar, time_shift = time_shift, $
+      srm_atten = srm_atten, specfilename = specfilename, srmfilename = srmfilename, ph_edges = ph_edges, $
+      fits_info_params = fits_info_params, xspec = xspec, silent = silent
+    
+    ospex_obj->set, spex_file_reader = 'stx_read_sp'
+    ospex_obj->set, spex_specfile = specfilename   ; name of your spectrum file
+    ospex_obj->set, spex_drmfile = srmfilename
+  
+  endif else begin
+    ;if the generate_fits keyword is not set use the spex_user_data strategy to pass in the data directly to the ospex object
+
+    energy_edges = e_axis.edges_2
+    Edge_Products, ph_edges, edges_2 = ph_edges2
+
+    utime2 = transpose(stx_time2any( [[t_axis.time_start], [t_axis.time_end]] ))
+    
+    ospex_obj->set, spex_data_source = 'spex_user_data'
+    ospex_obj->set, spectrum = float(spec),  $
+      spex_ct_edges = energy_edges, $
+      spex_ut_edges = utime2, $
+      livetime = avg_live_time_bins_rep, $
+      errors = spec_error
+    srm = rep_tag_name(srm,'smatrix','drm')
+    ospex_obj->set, spex_respinfo = srm
+    ospex_obj->set, spex_area = srm.area
+    ospex_obj->set, spex_detectors = 'STIX'
+    ospex_obj->set, spex_drm_ct_edges = energy_edges
+    ospex_obj->set, spex_drm_ph_edges = ph_edges2
+  endelse
+
+  ospex_obj->set, spex_uncert = sys_uncert
+  ospex_obj->set, spex_error_use_expected = 0
+
+  counts_str = ospex_obj->getdata(spex_units='counts')
+  origunits = ospex_obj->get(/spex_data_origunits)
+  origunits.data_name = 'STIX'
+  ospex_obj->set, spex_data_origunits = origunits
+  
+  if keyword_set(plot) then begin
+    ospex_obj ->gui
+    ospex_obj ->set, spex_eband = get_edges([4.,10.,15.,25, 50, 84.], /edges_2)
+    ospex_obj ->plot_time,  spex_units='flux', /show_err, obj = plotman_object
+  endif
 
 end
 

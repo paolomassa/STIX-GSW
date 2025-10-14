@@ -6,111 +6,198 @@
 ;
 ; PURPOSE:
 ;
-;   Compute the transmission of a STIX subcollimator corrected for internal shadowing
+;   Compute STIX subcollimators' transmission:
+;   - Low-energy transmission is derived from self-calibration using fully illuminated CFL pixels
+;   - High-energy transmission is based on a wegde model for grid imperfections
 ;
 ; CALLING SEQUENCE:
 ;
-;   subc_transmission = stx_subc_transmission(flare_loc)
+;   subc_transmission = stx_subc_transmission(flare_loc, ph_in, simple_transm = simple_transm)
 ;
 ; INPUTS:
 ;
 ;   flare_loc: bidimensional array containing the X and Y coordinate of the flare location
 ;             (arcsec, in the STIX coordinate frame)
-;
+;             
 ;   ph_in: an array of photon energies [keV] (restricted to range 1-1000)
-;
-; KEYWORDS:
-; 
-;   simple_transm: if set a simplified version of the grid transmission is computed
 ;
 ; OUTPUTS:
 ;
-;   A float number that represent the subcollimator transmission value
+;   Transmission value for every subcollimator
 ;
-; HISTORY: August 2022, Massa P., first version (working only for detectors 3 to 10)
-;          11-Jul-2023, ECMD (Graz), updated following Recipe for STIX Flux and Amplitude Calibration (8-Nov 2022 gh)
-;                                    to include transparency and corner cutting for pure Tungsten grids
-;          24-Oct-2023, ECMD (Graz), added default to calculate low energy approximation if no input photon energies are passed
-;          31-Oct-2023, Massa P., added 'simple_transm' keyword to compute a simple version of the grid transmission
-;                                 (temporary solution used for imaging)
-;          12-Jun-2024, Massa P., corrected bug in the definition of grid orientation to be used for computing 
-;                                 the offset angle of the flare location relative to the slats.
+; KEYWORDS:
+;   
+;   simple_transm: if set, the energy-dependence of the grid transmission is not considered
+;   
+;   silent: if set, no message is displayed
+;
+; HISTORY: May 2025, Massa P., based on the previous version by ECMD.
+;                    Working only for detectors 3 to 10. 
 ;          
 ; CONTACT:
-;   paolo.massa@wku.edu
+;   paolo.massa@fhnw.ch
 ;-
 
 
-function stx_subc_transmission, flare_loc, ph_in, flux = flux, simple_transm = simple_transm, silent = silent
+function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm, silent = silent, _extra=extra
 
-  restore,loc_file( 'grid_temp.sav', path = getenv('STX_GRID') )
-  fff=read_ascii(loc_file( 'grid_param_front.txt', path = getenv('STX_GRID') ),temp=grid_temp)
-  rrr=read_ascii(loc_file( 'grid_param_rear.txt', path = getenv('STX_GRID') ),temp=grid_temp)
 
-; To determine the transmission through the tungsten slats a Linear Attenuation Coefficient [mm-1] 
-; (1/absorption length in mm) is estimated for an each expected incoming photon energy and passed to stx_grid_transmission. 
-; The mass attenuation coefficient [cm^2/gm] is calculated using the xcom tabulated values in xsec.pro 
-; and a value of 19.3 g/cm3 is used for the density of tungsten. This is then divided by 10 to convert from [cm-1] to [mm-1].
-;
-; For backwards compatibility if no photon energy array is passed in the transmission is calculated for 1 keV
-; (the lowest tabulated value). This should provide a reasonable approximation to the previously assumed 
-; fully opaque grids. 
+  ; For backwards compatibility if no photon energy array is passed in the transmission is calculated for 1 keV
+  ; (the lowest tabulated value). This should provide a reasonable approximation to the previously assumed
+  ; fully opaque grids.
 
   if ~keyword_set(ph_in) then begin
     ph_in = 1.
-    if ~keyword_set(silent) then begin 
-    if ~keyword_set(simple_transm) then message, 'No photon energies passed, calculating low energy approximation at 1 keV.', /info $
-    else message, 'Simple grid transmission selected, calculating opaque approximation.', /info
+    if ~keyword_set(silent) then begin
+      if ~keyword_set(simple_transm) then message, 'No photon energies passed, calculating low energy approximation at 1 keV.', /info $
+      else message, 'Simple grid transmission selected, calculating opaque approximation.', /info
     endif
   endif
 
 
-  transm = fltarr(n_elements(ph_in), 32) ; the tranmission is calculated 
+  ;;************ Read grid parameters
+  restore,loc_file( 'grid_temp.sav', path = getenv('STX_GRID') )
+  fff=read_ascii(loc_file( 'grid_param_front.txt', path = getenv('STX_GRID') ),temp=grid_temp)
+  rrr=read_ascii(loc_file( 'grid_param_rear.txt', path = getenv('STX_GRID') ),temp=grid_temp)
+  
+  ;; Orientation of the slits of the grid as seen from the detector side
+  grid_orient_front_all = fff.o 
+  grid_orient_rear_all = rrr.o
+  
+  pitch_front_all = fff.P
+  pitch_rear_all = rrr.P
+  
+  thickness_front_all = fff.THICK
+  thickness_rear_all = rrr.THICK
 
-  mass_attenuation = xsec(ph_in, (Element2Z('W'))[0], 'AB', /cm2perg, error=error, use_xcom=1)
-  gmcm = 19.30
+  sc = fff.SC
+  
+  ;;************ Read intercept and slope of the transmission linear fits
+  fpath = loc_file( 'CFL_subcoll_transmission.txt', path = getenv('STX_GRID') )
+  readcol, fpath,subc_n_all,subc_label,intercept_all,slope_all, skipline = 1, format = 'I,A,F,F', /silent
+  
+  if ~keyword_set(simple_transm) then begin
+  
+    ;;************ Compute path length in tungsten (L)
+    
+    ; To determine the transmission through the tungsten slats a Linear Attenuation Coefficient [mm-1]
+    ; (1/absorption length in mm) is estimated for an each expected incoming photon energy and passed to stx_grid_transmission.
+    ; The mass attenuation coefficient [cm^2/gm] is calculated using the xcom tabulated values in xsec.pro
+    ; and a value of 19.3 g/cm3 is used for the density of tungsten. This is then divided by 10 to convert from [cm-1] to [mm-1].
+    
+    mass_attenuation = xsec(ph_in, (Element2Z('W'))[0], 'AB', /cm2perg, error=error, use_xcom=1)
+    gmcm = 19.30
+    L = 1. / (mass_attenuation*gmcm/10.) ;; in mm 
+   
+    subc_transm=fltarr(n_elements(L),32) 
+    
+    for subc_n=0,31 do begin
+      
+      ;; Exclude detectors 1a,b,c, 2a,b,c, CFL and BKG
+      if ((subc_n+1) ne 9) and ((subc_n+1) ne 10) and $
+         ((subc_n+1) ne 11) and ((subc_n+1) ne 12) and ((subc_n+1) ne 13) and $
+         ((subc_n+1) ne 17) and ((subc_n+1) ne 18) and ((subc_n+1) ne 19) then begin
+      
+        idx = where(sc eq (subc_n+1), count)
+    
+        if count eq 1 then begin
+          
+          ;;------ Front grid
+          grid_orient_front = grid_orient_front_all[idx]
+          pitch_front = pitch_front_all[idx]
+          thickness_front = thickness_front_all[idx]
+          
+          ;;------ Rear grid
+          grid_orient_rear = grid_orient_rear_all[idx]
+          pitch_rear = pitch_rear_all[idx]
+          thickness_rear = thickness_rear_all[idx]
+        
+        endif
+        
+        grid_orient_avg = (grid_orient_front + grid_orient_rear) / 2.
+    
+        ;;------ Off-axis angle theta
+        flare_loc_deg = flare_loc / 3600. ;; Convert coordinates to deg
+        theta = flare_loc_deg[0] * cos(grid_orient_avg * !dtor) + flare_loc_deg[1] * sin(grid_orient_avg * !dtor)
+        
+        ;;------ Subcollimator tranmsission at low energies
+        idx = where(subc_n_all eq (subc_n+1))
+        intercept = intercept_all[idx]
+        slope = slope_all[idx]
+        subc_transm_low_e = intercept + slope * theta
+        
+        ;;------ Transmission of front and rear grid
+        slit_to_pitch = sqrt(subc_transm_low_e)
+    
+        slit_front = slit_to_pitch*pitch_front
+        slit_rear = slit_to_pitch*pitch_rear
+    
+        
+        transm_front = stx_grid_transmission(pitch_front, slit_front, thickness_front, L, simple_transm=simple_transm, _extra=extra)
+        transm_rear = stx_grid_transmission(pitch_rear, slit_rear, thickness_rear, L, simple_transm=simple_transm, _extra=extra)
+        
+        subc_transm[*,subc_n] = transm_front * transm_rear
+      
+      endif else begin
+        
+        ;; Subc. transmission for detectors 1a,b,c, 2a,b,c, CFL and BKG is set to 1.
+        ;; Once the calibration of sub-collimators 1a,b,c, 2a,b,c will be performed, this will be changed
+        subc_transm[*,subc_n] = 1.
+        
+      endelse
+      
+    endfor
+  
+  endif else begin
+    
+    ;;************ SIMPLE GRID TRANSMISSION: NO ENERGY DEPENDENCE
+    
+    subc_transm=fltarr(32)
 
-  linear_attenuation = mass_attenuation*gmcm/10.
+    for subc_n=0,31 do begin
 
+      ;; Exclude detectors 1a,b,c, 2a,b,c, CFL and BKG
+      if ((subc_n+1) ne 9) and ((subc_n+1) ne 10) and $
+        ((subc_n+1) ne 11) and ((subc_n+1) ne 12) and ((subc_n+1) ne 13) and $
+        ((subc_n+1) ne 17) and ((subc_n+1) ne 18) and ((subc_n+1) ne 19) then begin
 
-  grid_orient_front = fff.o ;; Orientation of the slits of the grid as seen from the detector side
-  grid_pitch_front  = fff.p
-  grid_slit_front   = fff.slit
-  grid_thick_front  = fff.thick
-  bridge_width_front = fff.bwidth
-  bridge_pitch_front = fff.bpitch
+        idx = where(sc eq (subc_n+1), count)
 
-  grid_orient_rear = rrr.o ;; Orientation of the slits of the grid as seen from the detector side
-  grid_pitch_rear  = rrr.p
-  grid_slit_rear   = rrr.slit
-  grid_thick_rear  = rrr.thick
-  bridge_width_rear = rrr.bwidth
-  bridge_pitch_rear = rrr.bpitch
+        if count eq 1 then begin
 
+          ;;------ Front grid
+          grid_orient_front = grid_orient_front_all[idx]
 
-  sc = fff.sc
+          ;;------ Rear grid
+          grid_orient_rear = grid_orient_rear_all[idx]
 
-  for i=0,n_elements(grid_pitch_front)-1 do begin
+        endif
 
-    ;; Exclude detectors 1 and 2
-    if (sc[i] ne 11) and (sc[i] ne 12) and (sc[i] ne 13) and (sc[i] ne 17) and (sc[i] ne 18) and (sc[i] ne 19) then begin
+        grid_orient_avg = (grid_orient_front + grid_orient_rear) / 2.
 
-      transm_front = stx_grid_transmission(flare_loc[0], flare_loc[1], grid_orient_front[i], $
-        grid_pitch_front[i], grid_slit_front[i], grid_thick_front[i], bridge_width_front[i], bridge_pitch_front[i], $
-        linear_attenuation, flux = flux, simple_transm = simple_transm)
+        ;;------ Off-axis angle theta
+        flare_loc_deg = flare_loc / 3600. ;; Convert coordinates to deg
+        theta = flare_loc_deg[0] * cos(grid_orient_avg * !dtor) + flare_loc_deg[1] * sin(grid_orient_avg * !dtor)
+        
+        ;;------ Subcollimator tranmsission at low energies
+        idx = where(subc_n_all eq (subc_n+1))
+        intercept = intercept_all[idx]
+        slope = slope_all[idx]
+        
+        subc_transm[subc_n] = intercept + slope * theta
 
-      transm_rear  = stx_grid_transmission(flare_loc[0], flare_loc[1], grid_orient_rear[i], $
-        grid_pitch_rear[i], grid_slit_rear[i], grid_thick_rear[i], bridge_width_rear[i], bridge_pitch_rear[i], $
-        linear_attenuation, flux = flux, simple_transm = simple_transm)
+      endif else begin
 
-      transm[*,sc[i]-1] = transm_front * transm_rear
+        ;; Subc. transmission for detectors 1a,b,c, 2a,b,c, CFL and BKG is set to 1.
+        ;; Once the calibration of sub-collimators 1a,b,c, 2a,b,c will be performed, this will be changed
+        subc_transm[subc_n] = 1.
 
-    endif
+      endelse
+      
+    endfor
 
-  endfor
-
-  transm[where(transm eq 0.)] = 0.25
-
-  return, transm
+  endelse
+  
+  return, subc_transm
 
 end

@@ -113,123 +113,134 @@ imsize    = [129, 129]
 ; Pixel size in arcsec  
 pixel     = [2.,2.]       
 
-stop
-
-;******************************************* BACKPROJECTION ********************************************************
-
-; For using 'stx_show_bproj', create the visibility structure with the default 'subc_index' (from 10 to 3). Otherwise
-; it throws an error
-
-stx_show_bproj,vis,aux_data,imsize=imsize,pixel=pixel,out=bp_map,scaled_out=scaled_out
+;stop
 ;
-; - Window 0: each row corresponds to a different resolution (from top to bottom, label 10 to 3). The first three
-;             columns refer to label 'a', 'b' and 'c'; the last column is the  sum of the first three.
-; - Window 2: Natural weighting (first row) and uniform weighting (second row). From left to right, backprojection
-;             obtained starting from subcollimators 10 and subsequently adding subcollimators with finer resolution
+;;******************************************* BACKPROJECTION ********************************************************
+;
+;; For using 'stx_show_bproj', create the visibility structure with the default 'subc_index' (from 10 to 3). Otherwise
+;; it throws an error
+;
+;stx_show_bproj,vis,aux_data,imsize=imsize,pixel=pixel,out=bp_map,scaled_out=scaled_out
+;;
+;; - Window 0: each row corresponds to a different resolution (from top to bottom, label 10 to 3). The first three
+;;             columns refer to label 'a', 'b' and 'c'; the last column is the  sum of the first three.
+;; - Window 2: Natural weighting (first row) and uniform weighting (second row). From left to right, backprojection
+;;             obtained starting from subcollimators 10 and subsequently adding subcollimators with finer resolution
+;
+;; BACKPROJECTION natural weighting
+;bp_nat_map = stx_bproj(vis,imsize,pixel,aux_data)
+;
+;; BACKPROJECTION uniform weighting
+;bp_uni_map = stx_bproj(vis,imsize,pixel,aux_data,/uni)
+;
+;stop
+;
+;;**************************************** CLEAN (from visibilities) *********************************************
+;
+;; Number of iterations
+;niter  = 200
+;; Gain used in each clean iteration
+;gain   = 0.1
+;; The plot of the clean components and of the cleaned map is shown at every iteration
+;nmap   = 1      
+;
+;;Output are 5 maps
+;;index 0: CLEAN map
+;;index 1: Bproj map
+;;index 2: residual map
+;;index 3: clean component map
+;;index 4: clean map without residuals added
+;beam_width = 20.
+;clean_map=stx_vis_clean(vis,aux_data,niter=niter,image_dim=imsize[0],PIXEL=pixel[0],uni=0,gain=0.1,nmap=nmap,$
+;                        /plot,/set, beam_width=beam_width)
+;
+;;; Plot of visibility amplitudes and phases fit: use clean components map
+;stx_plot_fit_map, clean_map[3], this_window=1
+;
+;stop
+;
+;;;************************************************ MEM_GE *********************************************************
+;
+;; Maximum entropy method (see Massa P. et al (2020) for details)
+;mem_ge_map=stx_mem_ge(vis,imsize,pixel,aux_data)
+;
+;loadct,5,/silent
+;window, 0
+;cleanplot
+;plot_map, mem_ge_map, /cbar,title='MEM_GE - CLEAN contour (50%)'
+;plot_map,clean_map[0],/over,/perc,level=[50]
+;
+;stx_plot_fit_map, mem_ge_map, this_window=1
+;
+;stop
+;
+;;*************************************** Expectation Maximization ************************************************
+;
+;; Expectation Maximization algorithm from STIX counts (see Massa P. et al (2019) for details). Takes as input a 
+;; summed pixel data structure
+;pixel_data_summed = stx_construct_pixel_data_summed(path_sci_file, time_range, energy_range, path_bkg_file=path_bkg_file, $
+;                                                    xy_flare=xy_flare, /silent)
+;
+;em_map = stx_em(pixel_data_summed, aux_data, imsize=imsize, pixel=pixel,$
+;                mapcenter=mapcenter)
+;
+;loadct,5,/silent
+;window, 0
+;cleanplot
+;plot_map, em_map, /cbar,title='EM - CLEAN contour (50%)'
+;plot_map,clean_map[0],/over,/perc,level=[50]
+;
+;stx_plot_fit_map, em_map, this_window=1
+;
+;stop
+;
+;;*************************************** VIS_FWDFIT ************************************************
+;
+;configuration = 'ellipse'
+;
+;; Comments:
+;; 1) use the 'srcin' keyword to fix the value of some of the parameters (and fit the remaining ones);
+;;    Please, refer to the header of the FWDFIT-PSO procedure for details.
+;; 2) 'srcstrout_pso' is a structure containing the values of the optimized parameters.
+;; 3) set /uncertainty for computing an estimate of the uncertainty on the parameters. The values of 
+;;    the uncertainties are stored in 'fitsigmasout_pso' 
+;
+;vis_fwdfit_pso_map = stx_vis_fwdfit_pso(configuration,vis,aux_data,imsize=imsize,pixel=pixel, $
+;                                        srcstr = srcstrout_pso,fitsigmas=fitsigmasout_pso,/uncertainty)
+;
+;loadct,5,/silent
+;window, 0
+;cleanplot
+;plot_map, vis_fwdfit_pso_map, /cbar,title='VIS_FWDFIT_PSO - CLEAN contour (50%)'
+;plot_map,clean_map[0],/over,/perc,level=[50]
+;
+;stx_plot_fit_map, vis_fwdfit_pso_map, this_window=1
+;
+;stop
+;
+;;*********************************************** COMPARISON ******************************************************
+;
+;loadct,5,/silent
+;window,0,xsize=5*imsize[0],ysize=5*imsize[0]
+;cleanplot
+;!p.multi=[0,2,2]
+;chs2=1.
+;plot_map,clean_map[0],charsize=chs2,title='CLEAN'
+;plot_map,mem_ge_map,charsize=chs2,title='MEM_GE'
+;plot_map,em_map,charsize=chs2,title='EM'
+;plot_map,vis_fwdfit_pso_map,charsize=chs2,title='VIS_FWDFIT_PSO'
 
-; BACKPROJECTION natural weighting
-bp_nat_map = stx_bproj(vis,imsize,pixel,aux_data)
+;************************************************ UV_SMOOTH *******************************************************
 
-; BACKPROJECTION uniform weighting
-bp_uni_map = stx_bproj(vis,imsize,pixel,aux_data,/uni)
-
-stop
-
-;**************************************** CLEAN (from visibilities) *********************************************
-
-; Number of iterations
-niter  = 200
-; Gain used in each clean iteration
-gain   = 0.1
-; The plot of the clean components and of the cleaned map is shown at every iteration
-nmap   = 1      
-
-;Output are 5 maps
-;index 0: CLEAN map
-;index 1: Bproj map
-;index 2: residual map
-;index 3: clean component map
-;index 4: clean map without residuals added
-beam_width = 20.
-clean_map=stx_vis_clean(vis,aux_data,niter=niter,image_dim=imsize[0],PIXEL=pixel[0],uni=0,gain=0.1,nmap=nmap,$
-                        /plot,/set, beam_width=beam_width)
-
-;; Plot of visibility amplitudes and phases fit: use clean components map
-stx_plot_fit_map, clean_map[3], this_window=1
-
-stop
-
-;;************************************************ MEM_GE *********************************************************
-
-; Maximum entropy method (see Massa P. et al (2020) for details)
-mem_ge_map=stx_mem_ge(vis,imsize,pixel,aux_data)
-
+uv_smooth_map = stx_uv_smooth(vis,aux_data,imsize=imsize, pixel=pixel,method=method, threshold_PSI=threshold_PSI, $
+                              ep = ep, flare_loc=flare_loc, NOPLOT = NOPLOT, uv_window = uv_window, _extra =_extra)
+                              
 loadct,5,/silent
 window, 0
 cleanplot
-plot_map, mem_ge_map, /cbar,title='MEM_GE - CLEAN contour (50%)'
-plot_map,clean_map[0],/over,/perc,level=[50]
+plot_map, uv_smooth_map, /cbar,title='UV_SMOOTH - CLEAN contour (50%)'
+;plot_map,clean_map[0],/over,/perc,level=[50]
 
-stx_plot_fit_map, mem_ge_map, this_window=1
-
-stop
-
-;*************************************** Expectation Maximization ************************************************
-
-; Expectation Maximization algorithm from STIX counts (see Massa P. et al (2019) for details). Takes as input a 
-; summed pixel data structure
-pixel_data_summed = stx_construct_pixel_data_summed(path_sci_file, time_range, energy_range, path_bkg_file=path_bkg_file, $
-                                                    xy_flare=xy_flare, /silent)
-
-em_map = stx_em(pixel_data_summed, aux_data, imsize=imsize, pixel=pixel,$
-                mapcenter=mapcenter)
-
-loadct,5,/silent
-window, 0
-cleanplot
-plot_map, em_map, /cbar,title='EM - CLEAN contour (50%)'
-plot_map,clean_map[0],/over,/perc,level=[50]
-
-stx_plot_fit_map, em_map, this_window=1
-
-stop
-
-;*************************************** VIS_FWDFIT ************************************************
-
-configuration = 'ellipse'
-
-; Comments:
-; 1) use the 'srcin' keyword to fix the value of some of the parameters (and fit the remaining ones);
-;    Please, refer to the header of the FWDFIT-PSO procedure for details.
-; 2) 'srcstrout_pso' is a structure containing the values of the optimized parameters.
-; 3) set /uncertainty for computing an estimate of the uncertainty on the parameters. The values of 
-;    the uncertainties are stored in 'fitsigmasout_pso' 
-
-vis_fwdfit_pso_map = stx_vis_fwdfit_pso(configuration,vis,aux_data,imsize=imsize,pixel=pixel, $
-                                        srcstr = srcstrout_pso,fitsigmas=fitsigmasout_pso,/uncertainty)
-
-loadct,5,/silent
-window, 0
-cleanplot
-plot_map, vis_fwdfit_pso_map, /cbar,title='VIS_FWDFIT_PSO - CLEAN contour (50%)'
-plot_map,clean_map[0],/over,/perc,level=[50]
-
-stx_plot_fit_map, vis_fwdfit_pso_map, this_window=1
-
-stop
-
-;*********************************************** COMPARISON ******************************************************
-
-loadct,5,/silent
-window,0,xsize=5*imsize[0],ysize=5*imsize[0]
-cleanplot
-!p.multi=[0,2,2]
-chs2=1.
-plot_map,clean_map[0],charsize=chs2,title='CLEAN'
-plot_map,mem_ge_map,charsize=chs2,title='MEM_GE'
-plot_map,em_map,charsize=chs2,title='EM'
-plot_map,vis_fwdfit_pso_map,charsize=chs2,title='VIS_FWDFIT_PSO'
-
-
+stx_plot_fit_map, uv_smooth_map, this_window=1
 
 end

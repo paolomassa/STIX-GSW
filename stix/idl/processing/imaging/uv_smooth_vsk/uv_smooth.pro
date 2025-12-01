@@ -137,6 +137,8 @@ pro uv_smooth, vis, imsize=imsize, pixel=pixel, method=method, threshold_PSI=thr
   ;;;;;;;;;;;;;;;;;; Interpolation with VSKs
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+  visnew = uv_smooth_vsk(vis, usampl, N, method, Ulimit, threshold_PSI, ep, aux_data)
+
   
   Rmax = max(sqrt(vis.u*vis.u+vis.v*vis.v))
   for i = 0L,N-1 do begin

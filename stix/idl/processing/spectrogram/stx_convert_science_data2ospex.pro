@@ -283,10 +283,9 @@ pro stx_convert_science_data2ospex, spectrogram = spectrogram, specpar = specpar
   fits_info_params.specfile = (cur_spec_fn eq '') ? specfilename : cur_spec_fn
   fits_info_params.srmfile = (cur_srm_fn eq '') ? srmfilename : cur_srm_fn
 
-  transmission = read_csv(loc_file( 'stix_transmission_by_component_highres_20240711_010-100eVBin.csv', path = getenv('STX_GRID')))
-
-  phe = transmission.field9
-  phe = phe[where(phe gt emin-1 and phe lt 2*emax)]
+  transmission = read_csv(loc_file( 'stix_transmission_highres_20251110.csv', path = getenv('STX_GRID')))
+  phe = transmission.(0)
+  phe = phe[where(phe gt emin-1 and phe lt 3.5*emax)]
   edge_products, phe, mean = mean_phe, width = w_phe
   ph_in = [mean_phe[0] - w_phe[0], mean_phe]
 

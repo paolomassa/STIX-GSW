@@ -55,17 +55,15 @@ function stx_grid_transmission, pitch, slit, thickness, L, simple_transm=simple_
   if ~keyword_set(simple_transm) then begin
   
     n_energies = n_elements(L)
-    n_subc = n_elements(pitch)
   
-    slit_rep = transpose(cmreplicate(slit, n_energies))
-    pitch_rep = transpose(cmreplicate(pitch, n_energies))
-    H_rep = transpose(cmreplicate(thickness, n_energies))
-    L_rep = cmreplicate(L, n_subc)
+    slit_rep = replicate(slit, n_energies)
+    pitch_rep = replicate(pitch, n_energies)
+    H_rep = replicate(thickness, n_energies)
   
     ;; Transmission for a wedge shape model for grid imperfections
-    g0 = slit_rep / pitch_rep + (pitch_rep - slit_rep) / pitch_rep * exp( - H_rep / L_rep )
-    ttt = L_rep / dh * ( 1. - exp(- dh / L_rep ) )
-    g1 = 2. * ds / pitch_rep * (ttt - exp( - H_rep / L_rep ))
+    g0 = slit_rep / pitch_rep + (pitch_rep - slit_rep) / pitch_rep * exp( - H_rep / L )
+    ttt = L / dh * ( 1. - exp(- dh / L ) )
+    g1 = 2. * ds / pitch_rep * (ttt - exp( - H_rep / L ))
     
     g_transmission = g0 + g1
   

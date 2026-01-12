@@ -151,6 +151,8 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
         intercept = intercept_all[idx]
         slope = slope_all[idx]
         subc_transm_low_e = intercept + slope * theta
+        ;; Guard against negative low-energy transmission values, which would yield NaN in sqrt()
+        IF subc_transm_low_e LT 0.0 THEN subc_transm_low_e = 0.0
         
         ;;------ Transmission of front and rear grid
         slit_to_pitch = sqrt(subc_transm_low_e)

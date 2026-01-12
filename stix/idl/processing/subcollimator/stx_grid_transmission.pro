@@ -63,15 +63,15 @@ function stx_grid_transmission, pitch, slit, thickness, L, simple_transm=simple_
     H_rep = replicate(thickness, n_energies)
   
     ;; Transmission for a wedge shape model for grid imperfections
-    g0 = slit_rep / pitch_rep + (pitch_rep - slit_rep) / pitch_rep * exp( - H_rep / L )
-    ttt = L / dh * ( 1. - exp(- dh / L ) )
-    g1 = 2. * ds / pitch_rep * (ttt - exp( - H_rep / L ))
+    g0 = f_div(slit_rep, pitch_rep) + f_div(pitch_rep - slit_rep, pitch_rep) * exp( - f_div(H_rep, L) )
+    ttt = f_div(L, dh) * ( 1. - exp(- f_div(dh, L) ) )
+    g1 = 2. * f_div(ds, pitch_rep) * (ttt - exp( - f_div(H_rep, L) ))
     
     g_transmission = g0 + g1
   
   endif else begin
     
-    g_transmission = slit / pitch
+    g_transmission = f_div(slit, pitch)
   
   endelse
   

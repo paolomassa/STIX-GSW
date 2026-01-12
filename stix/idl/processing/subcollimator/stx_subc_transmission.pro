@@ -74,7 +74,33 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
   
   ;;************ Read intercept and slope of the transmission linear fits
   fpath = loc_file( 'CFL_subcoll_transmission.txt', path = getenv('STX_GRID') )
-  readcol, fpath,subc_n_all,subc_label,intercept_all,slope_all, skipline = 1, format = 'I,A,F,F', /silent
+  
+  ; Ensure the transmission file exists before attempting to read it
+  if ~file_exist(fpath) then message, 'stx_subc_transmission: Transmission file not found.'
+  
+  ; Read the transmission parameters with error trapping
+  catch, error_status
+  if error_status ne 0 then begin
+    
+    ; An error occurred during READCOL
+    catch, /cancel
+    message, 'stx_subc_transmission: Error reading transmission file: ' + !error_state.msg
+    
+  endif
+  
+  readcol, fpath, subc_n_all, subc_label, intercept_all, slope_all, $
+    skipline = 1, format = 'I,A,F,F', /silent
+
+  ; Cancel error trapping now that READCOL has completed
+  catch, /cancel
+  ; Basic sanity checks on the loaded columns
+  if (n_elements(subc_n_all) Eq 0) OR $
+    (n_elements(subc_label)    Ne n_elements(subc_n_all)) OR $
+    (n_elements(intercept_all) Ne n_elements(subc_n_all)) OR $
+    (n_elements(slope_all)     Ne n_elements(subc_n_all)) then begin
+    message, 'stx_subc_transmission: Malformed transmission file (unexpected number of columns/rows): ' + fpath
+  endif
+  
   
   if ~keyword_set(simple_transm) then begin
   

@@ -16,8 +16,10 @@
 ;
 ;   pitch: float, pitch of the grid (mm)
 ;   
-;   slit: float, effective slit width of the grid at low energies (mm). It takes into account also potential dependence on the flare location 
-;         (see stx_subc_transmission.pro)
+;   slit: float, effective slit width of the grid at low energies (mm). This value must be
+;         pre-calculated from low-energy calibration data, taking into account any potential
+;         dependence on the flare location and subcollimator (e.g. using stx_subc_transmission.pro),
+;         before being passed to this function.
 ;   
 ;   thickness: float, grid thickness (mm)
 ;   
@@ -48,7 +50,7 @@
 
 function stx_grid_transmission, pitch, slit, thickness, L, simple_transm=simple_transm, ds=ds, dh=dh
 
-  ;; Parameters of the wedge grid transmission model. The values are derived from fitting of STIX observation
+  ;; Parameters of the wedge grid transmission model. The values are derived from fitting of STIX observation (ds in mm, dh in mm)
   default, ds, 5e-3
   default, dh, 5e-2
   

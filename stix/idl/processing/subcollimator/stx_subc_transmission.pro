@@ -8,7 +8,7 @@
 ;
 ;   Compute STIX subcollimators' transmission:
 ;   - Low-energy transmission is derived from self-calibration using fully illuminated CFL pixels
-;   - High-energy transmission is based on a wegde model for grid imperfections
+;   - High-energy transmission is based on a wedge model for grid imperfections
 ;
 ; CALLING SEQUENCE:
 ;
@@ -120,7 +120,7 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
         flare_loc_deg = flare_loc / 3600. ;; Convert coordinates to deg
         theta = flare_loc_deg[0] * cos(grid_orient_avg * !dtor) + flare_loc_deg[1] * sin(grid_orient_avg * !dtor)
         
-        ;;------ Subcollimator tranmsission at low energies
+        ;;------ Subcollimator transmission at low energies
         idx = where(subc_n_all eq (subc_n+1))
         intercept = intercept_all[idx]
         slope = slope_all[idx]
@@ -179,7 +179,7 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
         flare_loc_deg = flare_loc / 3600. ;; Convert coordinates to deg
         theta = flare_loc_deg[0] * cos(grid_orient_avg * !dtor) + flare_loc_deg[1] * sin(grid_orient_avg * !dtor)
         
-        ;;------ Subcollimator tranmsission at low energies
+        ;;------ Subcollimator transmission at low energies
         idx = where(subc_n_all eq (subc_n+1))
         intercept = intercept_all[idx]
         slope = slope_all[idx]

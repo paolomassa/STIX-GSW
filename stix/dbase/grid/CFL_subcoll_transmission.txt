@@ -1,4 +1,4 @@
-subc_n,subc_label,intercept,slope[1/deg]
+subc_n,subc_label,intercept,slope[deg^-1]
 1,3c,0.2977,0.0235
 2,5c,0.1768,-0.0008
 3,10a,0.2358,-0.0004

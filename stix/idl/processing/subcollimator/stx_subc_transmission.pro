@@ -89,7 +89,7 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
     gmcm = 19.30
     L = 1. / (mass_attenuation*gmcm/10.) ;; in mm 
    
-    subc_transm=fltarr(n_elements(L),32) 
+    subc_transmission=fltarr(n_elements(L),32) 
     
     for subc_n=0,31 do begin
       
@@ -136,13 +136,13 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
         transm_front = stx_grid_transmission(pitch_front, slit_front, thickness_front, L, simple_transm=simple_transm, _extra=extra)
         transm_rear = stx_grid_transmission(pitch_rear, slit_rear, thickness_rear, L, simple_transm=simple_transm, _extra=extra)
         
-        subc_transm[*,subc_n] = transm_front * transm_rear
+        subc_transmission[*,subc_n] = transm_front * transm_rear
       
       endif else begin
         
         ;; Subc. transmission for detectors 1a,b,c, 2a,b,c, CFL and BKG is set to 1.
         ;; Once the calibration of sub-collimators 1a,b,c, 2a,b,c will be performed, this will be changed
-        subc_transm[*,subc_n] = 1.
+        subc_transmission[*,subc_n] = 1.
         
       endelse
       
@@ -152,7 +152,7 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
     
     ;;************ SIMPLE GRID TRANSMISSION: NO ENERGY DEPENDENCE
     
-    subc_transm=fltarr(32)
+    subc_transmission=fltarr(32)
 
     for subc_n=0,31 do begin
 
@@ -184,13 +184,13 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
         intercept = intercept_all[idx]
         slope = slope_all[idx]
         
-        subc_transm[subc_n] = intercept + slope * theta
+        subc_transmission[subc_n] = intercept + slope * theta
 
       endif else begin
 
         ;; Subc. transmission for detectors 1a,b,c, 2a,b,c, CFL and BKG is set to 1.
         ;; Once the calibration of sub-collimators 1a,b,c, 2a,b,c will be performed, this will be changed
-        subc_transm[subc_n] = 1.
+        subc_transmission[subc_n] = 1.
 
       endelse
       
@@ -198,6 +198,6 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
 
   endelse
   
-  return, subc_transm
+  return, subc_transmission
 
 end

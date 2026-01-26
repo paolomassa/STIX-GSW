@@ -113,7 +113,7 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
     
     mass_attenuation = xsec(ph_in, (Element2Z('W'))[0], 'AB', /cm2perg, error=error, use_xcom=1)
     gmcm = 19.30
-    L = 1. / (mass_attenuation*gmcm/10.) ;; in mm 
+    L = f_div(1., (mass_attenuation*gmcm/10.)) ;; in mm 
    
     subc_transmission=fltarr(n_elements(L),32) 
     

@@ -150,9 +150,12 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
         idx = where(subc_n_all eq (subc_n+1))
         intercept = intercept_all[idx]
         slope = slope_all[idx]
-        subc_transm_low_e = intercept + slope * theta
-        ;; Guard against negative low-energy transmission values, which would yield NaN in sqrt()
-        IF subc_transm_low_e LT 0.0 THEN subc_transm_low_e = 0.0
+        
+        value = intercept + slope * theta
+
+        if value le 0.0 then message, "Transmission value for subcollimator " + STRTRIM(STRING(subc_n+1), 2) + " is <= 0. Please, check if the provided flare location is correct."
+        
+        subc_transm_low_e = value
         
         ;;------ Transmission of front and rear grid
         slit_to_pitch = sqrt(subc_transm_low_e)
@@ -170,6 +173,9 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
         
         ;; Subc. transmission for detectors 1a,b,c, 2a,b,c, CFL and BKG is set to 1.
         ;; Once the calibration of sub-collimators 1a,b,c, 2a,b,c will be performed, this will be changed
+        
+        if ~keyword_set(silent) then MESSAGE, 'Set transmission=1 for subcollimator ' + STRTRIM(STRING(subc_n+1), 2) , /CONTINUE
+        
         subc_transmission[*,subc_n] = 1.
         
       endelse
@@ -212,7 +218,11 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
         intercept = intercept_all[idx]
         slope = slope_all[idx]
         
-        subc_transmission[subc_n] = intercept + slope * theta
+        value = intercept + slope * theta
+        
+        if value le 0. then message, "Transmission value for subcollimator " + STRTRIM(STRING(subc_n+1), 2) + " is <= 0. Please, check if the provided flare location is correct."
+        
+        subc_transmission[subc_n] = value
 
       endif else begin
 

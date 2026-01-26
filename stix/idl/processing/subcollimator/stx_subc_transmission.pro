@@ -94,10 +94,10 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
   ; Cancel error trapping now that READCOL has completed
   catch, /cancel
   ; Basic sanity checks on the loaded columns
-  if (n_elements(subc_n_all) Eq 0) OR $
-    (n_elements(subc_label)    Ne n_elements(subc_n_all)) OR $
-    (n_elements(intercept_all) Ne n_elements(subc_n_all)) OR $
-    (n_elements(slope_all)     Ne n_elements(subc_n_all)) then begin
+  if (n_elements(subc_n_all) eq 0) or $
+    (n_elements(subc_label)    ne n_elements(subc_n_all)) or $
+    (n_elements(intercept_all) ne n_elements(subc_n_all)) or $
+    (n_elements(slope_all)     ne n_elements(subc_n_all)) then begin
     message, 'stx_subc_transmission: Malformed transmission file (unexpected number of columns/rows): ' + fpath
   endif
   

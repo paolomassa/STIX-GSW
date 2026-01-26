@@ -147,7 +147,9 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
         theta = flare_loc_deg[0] * cos(grid_orient_avg * !dtor) + flare_loc_deg[1] * sin(grid_orient_avg * !dtor)
         
         ;;------ Subcollimator transmission at low energies
-        idx = where(subc_n_all eq (subc_n+1))
+        idx = where(subc_n_all eq (subc_n+1), count)
+        if count eq 0 then message, 'File ' + fpath + ' does not contain information on subcollimator '+ STRTRIM(STRING(subc_n+1), 2)
+        
         intercept = intercept_all[idx]
         slope = slope_all[idx]
         
@@ -214,7 +216,9 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
         theta = flare_loc_deg[0] * cos(grid_orient_avg * !dtor) + flare_loc_deg[1] * sin(grid_orient_avg * !dtor)
         
         ;;------ Subcollimator transmission at low energies
-        idx = where(subc_n_all eq (subc_n+1))
+        idx = where(subc_n_all eq (subc_n+1), count)
+        if count eq 0 then message, 'File ' + fpath + ' does not contain information on subcollimator '+ STRTRIM(STRING(subc_n+1), 2)
+        
         intercept = intercept_all[idx]
         slope = slope_all[idx]
         

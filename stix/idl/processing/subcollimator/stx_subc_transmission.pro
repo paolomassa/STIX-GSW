@@ -218,6 +218,9 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
 
         ;; Subc. transmission for detectors 1a,b,c, 2a,b,c, CFL and BKG is set to 1.
         ;; Once the calibration of sub-collimators 1a,b,c, 2a,b,c will be performed, this will be changed
+        
+        if ~keyword_set(silent) then MESSAGE, 'Set transmission=1 for subcollimator ' + STRTRIM(STRING(subc_n+1), 2) , /CONTINUE
+        
         subc_transmission[subc_n] = 1.
 
       endelse

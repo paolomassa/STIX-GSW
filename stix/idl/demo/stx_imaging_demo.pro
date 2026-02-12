@@ -73,6 +73,15 @@ aux_data = stx_create_auxiliary_data(aux_fits_file, time_range)
 
 stop
 
+;********************************* DOWNLOAD AND READ CALIBRATION DATA ***********************************
+
+; Downaload the STIX calibration data corresponding to the time of the flare
+calib_file = stx_get_calibration_file(time_range[0], time_range[1], out_dir=out_dir)
+; This file contains the energy edges (in keV) that will be used to perform the ELUT correction 
+calib_data = stx_read_calibration_file(calib_file)
+
+stop
+
 ;*************************************** ESTIMATE FLARE LOCATION **************************************
 
 ; Returns the coordinates of the estimated flare location (arcsec, Helioprojective Cartesian coordinates 

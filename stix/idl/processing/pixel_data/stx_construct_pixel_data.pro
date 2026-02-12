@@ -46,7 +46,7 @@
 ;   path_bkg_file: path of a background L1 fits file. If provided, the fields 'COUNTS_BKG', 'COUNTS_ERROR_BKG' and 'LIVE_TIME_BKG'
 ;                  of the pixel_data structure are filled with the values read from the background measurement file
 ;
-;   elut_corr: if set, a correction based on a ELUT table is applied to the measured counts
+;   calib_data: stx_calibration_data structure to be used for performing the ELUT correction
 ;
 ;   xy_flare: two-element array containing the X and Y coordinates of the estimated flare location
 ;             (STIX coordinate frame, arcsec). If passed, the grid transmission correction is computed
@@ -80,12 +80,11 @@
 ;   paolo.massa@fhnw.ch
 ;-
 
-function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut_corr=elut_corr, $
+function stx_construct_pixel_data, path_sci_file, time_range, energy_range, calib_data=calib_data, $
   path_bkg_file=path_bkg_file, xy_flare=xy_flare, subc_index=subc_index, $
   sumcase=sumcase, silent=silent, no_small=no_small, no_rcr_check=no_rcr_check, $
   shift_duration=shift_duration,  _extra=extra
 
-  default, elut_corr, 1
   default, silent, 0
   default, subc_index, stx_label2ind(['10a','10b','10c','9a','9b','9c','8a','8b','8c','7a','7b','7c',$
     '6a','6b','6c','5a','5b','5c','4a','4b','4c','3a','3b','3c'])
@@ -316,7 +315,7 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
   counts_bkg_estimate_error = abs(counts_bkg_estimate) * sqrt( f_div(error_numerator,live_time_rep * counts_bkg)^2. + $
     f_div(live_time_error_bkg_rep,live_time_bkg_rep)^2.)
 
-  if elut_corr and ~silent then begin
+  if keyword_set(calib_data) and ~silent then begin
 
     ;; To be used for plot of the bkg subtracted spectrum
     spectrum_with_bkg = total(total(counts[*,0:7,subc_index], 3), 2) / (energy_high - energy_low)
@@ -387,13 +386,11 @@ function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut
 
   ;;************** Sum counts (and related errors) in energy
 
-  ;; Compute elut correction (if 'elut_corr' is set) - Correct just the first and the last energy bins (flat spectrum is assumed)
-  if elut_corr then begin
+  ;; Compute elut correction (if 'calib_data' is provided) - Correct just the first and the last energy bins (flat spectrum is assumed)
+  if keyword_set(calib_data) then begin
     
-    ;; Create daily ELUT
-    daily_elut = stx_create_daily_elut(stx_time2any(this_time_range[0]),  _extra=extra)
-    energy_bin_low = daily_elut.ENERGY_BIN_LOW
-    energy_bin_high = daily_elut.ENERGY_BIN_HIGH
+    energy_bin_low = calib_data.ENERGY_BIN_LOW
+    energy_bin_high = calib_data.ENERGY_BIN_HIGH
     
     energy_bin_low  = energy_bin_low[energy_bin_idx,*,*]
     energy_bin_high = energy_bin_high[energy_bin_idx,*,*]

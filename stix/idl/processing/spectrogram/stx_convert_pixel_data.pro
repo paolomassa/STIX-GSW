@@ -492,37 +492,6 @@ pro  stx_convert_pixel_data, fits_path_data = fits_path_data, fits_path_bk = fit
          count_rates_error_elut[e_bin,*,*,idx_time_min[t_bin]:idx_time_max[t_bin]] = elut_data.COUNTS_ERROR                            
       
       endfor   
-      
-;      ;; Apply slat transparency correction
-;      sp_index = elut_data.SP_INDEX
-;
-;      if keyword_set(flare_location_stx) then begin
-;
-;        slat_transparency_correction_factor = stx_slat_transparency_correction(ct_edges, flare_location_stx, sp_index=sp_index, subc_index=stx_label2det_ind('ALL'))
-;
-;      endif else begin
-;
-;        slat_transparency_correction_factor = stx_slat_transparency_correction(ct_edges, [0.,0.], sp_index=sp_index, subc_index=stx_label2det_ind('ALL'))
-;
-;      endelse
-;      ;; Ad hoc correction for CFL and BKG: we do not compute tungsten transparency
-;      slat_transparency_correction_factor[8:9,*] = 1.
-;
-;      n_time_bins = idx_time_max[t_bin]-idx_time_min[t_bin] + 1
-;
-;      if n_time_bins gt 1 then begin
-;
-;        slat_transparency_correction_factor = transpose(cmreplicate(slat_transparency_correction_factor, [12,n_time_bins]), [1,2,0,3]) 
-;        count_rates_elut[*,*,*,idx_time_min[t_bin]:idx_time_max[t_bin]] /= slat_transparency_correction_factor
-;        count_rates_error_elut[*,*,*,idx_time_min[t_bin]:idx_time_max[t_bin]] /= slat_transparency_correction_factor
-;        
-;      endif else begin
-;        
-;        slat_transparency_correction_factor = transpose(cmreplicate(slat_transparency_correction_factor, 12), [1,2,0]) 
-;        count_rates_elut[*,*,*,idx_time_min[t_bin]:idx_time_max[t_bin]] /= slat_transparency_correction_factor
-;        count_rates_error_elut[*,*,*,idx_time_min[t_bin]:idx_time_max[t_bin]] /= slat_transparency_correction_factor
-;        
-;      endelse
 
     endfor
     
@@ -619,12 +588,16 @@ pro  stx_convert_pixel_data, fits_path_data = fits_path_data, fits_path_bk = fit
   
   pixel_mask =detector_mask_used ## pixel_mask_used
   
-  transmission = read_csv(loc_file( 'stix_transmission_by_component_highres_20240711_010-100eVBin.csv', path = getenv('STX_GRID')))
+  transmission = read_csv(loc_file( 'stix_transmission_highres_20251110.csv', path = getenv('STX_GRID')))
 
   emin = 1
   emax = 150
-  phe = transmission.field9
-  phe = phe[where(phe gt emin-1 and phe lt 2*emax)]
+  phe = transmission.(0)
+  ; Select photon energies slightly beyond the nominal 500 keV range:
+  ; 3.5 * emax (with emax = 150 keV) = 525 keV, providing margin to cover
+  ; the high-energy tail of the response while still matching the "≈500 keV"
+  ; extension described in the analysis.
+  phe = phe[where(phe gt emin-1 and phe lt 3.5*emax)]
   edge_products, phe, mean = mean_phe, width = w_phe
   ph_edges = [mean_phe[0] - w_phe[0], mean_phe]
   

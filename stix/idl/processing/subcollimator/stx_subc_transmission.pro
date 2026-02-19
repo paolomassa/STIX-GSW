@@ -6,11 +6,13 @@
 ;
 ; PURPOSE:
 ;
-;   Compute the transmission of a STIX subcollimator using a linear fit of CFL-calibrated data
+;   Compute STIX subcollimators' transmission:
+;   - Low-energy transmission is derived from self-calibration using fully illuminated CFL pixels
+;   - High-energy transmission is based on a wedge model for grid imperfections
 ;
 ; CALLING SEQUENCE:
 ;
-;   subc_transmission = stx_subc_transmission(flare_loc)
+;   subc_transmission = stx_subc_transmission(flare_loc, ph_in, simple_transm = simple_transm)
 ;
 ; INPUTS:
 ;
@@ -25,10 +27,6 @@
 ;
 ; KEYWORDS:
 ;   
-;   ds: float. Width of the wedge model (in mm)
-;   
-;   dh: float. Hight of the wedge model (in mm)
-;   
 ;   simple_transm: if set, the energy-dependence of the grid transmission is not considered
 ;   
 ;   silent: if set, no message is displayed
@@ -41,17 +39,9 @@
 ;-
 
 
-function stx_subc_transmission, flare_loc, ph_in, ds=ds, dh=dh, simple_transm = simple_transm, silent = silent
+function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm, silent = silent, _extra=extra
 
-  ;; Parameters of the wedge grid transmission model. The values are derived from fitting of STIX observation
-  default, ds, 5e-3
-  default, dh, 5e-2
 
-  ; To determine the transmission through the tungsten slats a Linear Attenuation Coefficient [mm-1]
-  ; (1/absorption length in mm) is estimated for an each expected incoming photon energy and passed to stx_grid_transmission.
-  ; The mass attenuation coefficient [cm^2/gm] is calculated using the xcom tabulated values in xsec.pro
-  ; and a value of 19.3 g/cm3 is used for the density of tungsten. This is then divided by 10 to convert from [cm-1] to [mm-1].
-  ;
   ; For backwards compatibility if no photon energy array is passed in the transmission is calculated for 1 keV
   ; (the lowest tabulated value). This should provide a reasonable approximation to the previously assumed
   ; fully opaque grids.
@@ -65,7 +55,7 @@ function stx_subc_transmission, flare_loc, ph_in, ds=ds, dh=dh, simple_transm = 
   endif
 
 
-  ;; Read grid orientation. It is used to compute off-axis angle
+  ;;************ Read grid parameters
   restore,loc_file( 'grid_temp.sav', path = getenv('STX_GRID') )
   fff=read_ascii(loc_file( 'grid_param_front.txt', path = getenv('STX_GRID') ),temp=grid_temp)
   rrr=read_ascii(loc_file( 'grid_param_rear.txt', path = getenv('STX_GRID') ),temp=grid_temp)
@@ -76,92 +66,238 @@ function stx_subc_transmission, flare_loc, ph_in, ds=ds, dh=dh, simple_transm = 
   
   pitch_front_all = fff.P
   pitch_rear_all = rrr.P
+  
   thickness_front_all = fff.THICK
   thickness_rear_all = rrr.THICK
 
-  subc_n_front = fff.SC
-  subc_n_rear = rrr.SC
+  sc = fff.SC
   
-  grid_orient_front = fltarr(32)
-  grid_orient_rear = fltarr(32)
-  pitch_front = fltarr(32)
-  pitch_rear = fltarr(32)
-  thickness_front = fltarr(32)
-  thickness_rear = fltarr(32)
+  ;;************ Read intercept and slope of the transmission linear fits
+  fpath = loc_file( 'stix_subcoll_transmission_10_15keV.csv', path = getenv('STX_GRID') )
   
-  for subc_n=0,31 do begin
-    
-    ;; Front grid
-    subc_n_front = fff.SC
-    idx = where(subc_n_front eq (subc_n+1), count)
-    if count eq 1 then begin
-      
-      grid_orient_front[subc_n] = grid_orient_front_all[idx]
-      pitch_front[subc_n] = pitch_front_all[idx]
-      thickness_front[subc_n] = thickness_front_all[idx]
-    
-    endif else begin
-      
-      grid_orient_front[subc_n] = grid_orient_front_all[idx[0]]
-      pitch_front[subc_n] = pitch_front_all[idx[0]]
-      thickness_front[subc_n] = thickness_front_all[idx[0]]
-      
-    endelse
-    
-    ;; Rear grid
-    subc_n_rear = rrr.SC
-    idx = where(subc_n_rear eq (subc_n+1), count)
-    if count eq 1 then begin
-
-      grid_orient_rear[subc_n] = grid_orient_rear_all[idx]
-      pitch_rear[subc_n] = pitch_rear_all[idx]
-      thickness_rear[subc_n] = thickness_rear_all[idx]
-
-    endif else begin
-
-      grid_orient_rear[subc_n] = grid_orient_rear_all[idx[0]]
-      pitch_rear[subc_n] = pitch_rear_all[idx[0]]
-      thickness_rear[subc_n] = thickness_rear_all[idx[0]]
-
-    endelse
-    
-  endfor  
+  ; Ensure the transmission file exists before attempting to read it
+  if ~file_exist(fpath) then message, 'stx_subc_transmission: Transmission file not found.'
   
-  grid_orient_avg = (grid_orient_front + grid_orient_rear) / 2.
-
-  ;; Off-axis angle
-  flare_loc_deg = flare_loc / 3600. ;; Convert coordinates to deg
-  theta = flare_loc_deg[0] * cos(grid_orient_avg * !dtor) + flare_loc_deg[1] * sin(grid_orient_avg * !dtor)
-
-  ;; Read intercept and slope of the transmission linear fits
-  fpath = loc_file( 'CFL_subcoll_transmission.txt', path = getenv('STX_GRID') )
-  readcol, fpath,subc_n,subc_label,intercept,slope,$
-    skipline = 1, format = 'I,A,F,F', /silent
+  ; Read the transmission parameters with error trapping
+  catch, error_status
+  if error_status ne 0 then begin
+    
+    ; An error occurred during READCOL
+    catch, /cancel
+    message, 'stx_subc_transmission: Error reading transmission file: ' + !error_state.msg
+    
+  endif
   
-  subc_transm = intercept + slope * theta
+  subc_transmission = read_csv(fpath)
+  subc_n_all = subc_transmission.FIELD1
+  subc_label = subc_transmission.FIELD2
+  intercept_all = subc_transmission.FIELD3
+  slope_all = subc_transmission.FIELD5
+
+  ; Cancel error trapping now that READCOL has completed
+  catch, /cancel
+  ; Basic sanity checks on the loaded columns
+  if (n_elements(subc_n_all) eq 0) or $
+    (n_elements(subc_label)    ne n_elements(subc_n_all)) or $
+    (n_elements(intercept_all) ne n_elements(subc_n_all)) or $
+    (n_elements(slope_all)     ne n_elements(subc_n_all)) then begin
+    message, 'stx_subc_transmission: Malformed transmission file (unexpected number of columns/rows): ' + fpath
+  endif
+  
   
   if ~keyword_set(simple_transm) then begin
+  
+    ;;************ Compute path length in tungsten (L)
     
-    ;; Compute slit-to-pitch ratio as the sqrt of the subcoll. transmission
-    slit_to_pitch = sqrt(subc_transm)
-
-    slit_front = slit_to_pitch*pitch_front
-    slit_rear = slit_to_pitch*pitch_rear
-
-    ;; Compute absorption
+    ; To determine the transmission through the tungsten slats a Linear Attenuation Coefficient [mm-1]
+    ; (1/absorption length in mm) is estimated for an each expected incoming photon energy and passed to stx_grid_transmission.
+    ; The mass attenuation coefficient [cm^2/gm] is calculated using the xcom tabulated values in xsec.pro
+    ; and a value of 19.3 g/cm3 is used for the density of tungsten. This is then divided by 10 to convert from [cm-1] to [mm-1].
+    
     mass_attenuation = xsec(ph_in, (Element2Z('W'))[0], 'AB', /cm2perg, error=error, use_xcom=1)
     gmcm = 19.30
-    L = 1. / (mass_attenuation*gmcm/10.)
-
-    transm_front = stx_grid_transmission(pitch_front, slit_front, thickness_front, L, ds, dh)
-    transm_rear = stx_grid_transmission(pitch_rear, slit_rear, thickness_rear, L, ds, dh)
+    L = f_div(1., (mass_attenuation*gmcm/10.)) ;; in mm 
+   
+    subc_transmission=fltarr(n_elements(L),32) 
     
-    return, transm_front * transm_rear
+    for subc_n=0,31 do begin
+      
+      if ((subc_n+1) eq 9) or ((subc_n+1) eq 10) then continue ;; Exclude CFL and BKG
+      
+      ;;-------- FRONT GRID
+
+      subc_n_front = fff.SC
+      idx = where(subc_n_front eq (subc_n+1), count)
+
+      if count ne 0 then begin 
+
+        if ((subc_n+1) ne 11) and ((subc_n+1) ne 12) and ((subc_n+1) ne 13) and ((subc_n+1) ne 17) and ((subc_n+1) ne 18) and ((subc_n+1) ne 19) then begin ;; Detectors from 3a,b,c to 10a,b,c
   
+          grid_orient_front = grid_orient_front_all[idx]
+          pitch_front = pitch_front_all[idx]
+          thickness_front = thickness_front_all[idx]
+  
+  
+        endif else begin
+  
+          if ((subc_n+1) eq 12) or ((subc_n+1) eq 17) or ((subc_n+1) eq 19) then begin ;; Detectors 2a,b,c
+  
+            grid_orient_front = mean(grid_orient_front_all[idx])
+            pitch_front = mean(pitch_front_all[idx]) / 2.
+            thickness_front = 0.2
+  
+          endif else begin ;; Detectors 1a,b,c
+  
+            grid_orient_front = mean(grid_orient_front_all[idx])
+            pitch_front = mean(pitch_front_all[idx]) / 3.
+            thickness_front = 0.133
+  
+          endelse
+  
+        endelse
+      
+      endif
+
+      ;;-------- REAR GRID
+
+      subc_n_rear = rrr.SC
+      idx = where(subc_n_rear eq (subc_n+1), count)
+      
+      if count ne 0 then begin 
+
+        if ((subc_n+1) ne 11) and ((subc_n+1) ne 12) and ((subc_n+1) ne 13) and ((subc_n+1) ne 17) and ((subc_n+1) ne 18) and ((subc_n+1) ne 19) then begin ;; Detectors from 3a,b,c to 10a,b,c
+  
+          grid_orient_rear = grid_orient_rear_all[idx]
+          pitch_rear = pitch_rear_all[idx]
+          thickness_rear = thickness_rear_all[idx]
+  
+  
+        endif else begin
+  
+          if ((subc_n+1) eq 12) or ((subc_n+1) eq 17) or ((subc_n+1) eq 19) then begin ;; Detectors 2a,b,c
+  
+            grid_orient_rear = mean(grid_orient_rear_all[idx])
+            pitch_rear = mean(pitch_rear_all[idx]) / 2.
+            thickness_rear = 0.2
+  
+          endif else begin ;; Detectors 1a,b,c
+  
+            grid_orient_rear = mean(grid_orient_rear_all[idx])
+            pitch_rear = mean(pitch_rear_all[idx]) / 3.
+            thickness_rear = 0.133
+  
+          endelse
+  
+        endelse
+      
+      endif
+      
+      grid_orient_avg = (grid_orient_front + grid_orient_rear) / 2.
+
+      ;;------ Off-axis angle theta
+      flare_loc_deg = flare_loc / 3600. ;; Convert coordinates to deg
+      theta = flare_loc_deg[0] * cos(grid_orient_avg * !dtor) + flare_loc_deg[1] * sin(grid_orient_avg * !dtor)
+
+      ;;------ Subcollimator transmission at low energies
+      idx = where(subc_n_all eq (subc_n+1), count)
+      if count eq 0 then message, 'File ' + fpath + ' does not contain information on subcollimator '+ STRTRIM(STRING(subc_n+1), 2)
+
+      intercept = intercept_all[idx]
+      slope = slope_all[idx]
+
+      value = intercept + slope * theta
+
+      if value le 0.0 then message, "Transmission value for subcollimator " + STRTRIM(STRING(subc_n+1), 2) + " is <= 0. Please, check if the provided flare location is correct."
+      
+      subc_transm_low_e = value
+
+      ;;------ Transmission of front and rear grid
+      slit_to_pitch = sqrt(subc_transm_low_e)
+
+      slit_front = slit_to_pitch*pitch_front
+      slit_rear = slit_to_pitch*pitch_rear
+
+
+      transm_front = stx_grid_transmission(pitch_front, slit_front, thickness_front, L, simple_transm=simple_transm, _extra=extra)
+      transm_rear = stx_grid_transmission(pitch_rear, slit_rear, thickness_rear, L, simple_transm=simple_transm, _extra=extra)
+
+      subc_transmission[*,subc_n] = transm_front * transm_rear
+     
+      
+    endfor
+    
   endif else begin
     
-    return, subc_transm
+    ;;************ SIMPLE GRID TRANSMISSION: NO ENERGY DEPENDENCE
     
+    subc_transmission=fltarr(32)
+
+    for subc_n=0,31 do begin
+      
+      if ((subc_n+1) eq 9) or ((subc_n+1) eq 10) then continue ;; Exclude CFL and BKG
+      
+      ;;-------- FRONT GRID
+
+      subc_n_front = fff.SC
+      idx = where(subc_n_front eq (subc_n+1), count)
+
+      if count ne 0 then begin 
+
+        if ((subc_n+1) ne 11) and ((subc_n+1) ne 12) and ((subc_n+1) ne 13) and ((subc_n+1) ne 17) and ((subc_n+1) ne 18) and ((subc_n+1) ne 19) then begin ;; Detectors from 3a,b,c to 10a,b,c
+
+          grid_orient_front = grid_orient_front_all[idx]
+
+        endif else begin ;; Detectors 1a,b,c, 2a,b,c
+
+          grid_orient_front = mean(grid_orient_front_all[idx])
+
+        endelse
+
+      endif
+
+      ;;-------- REAR GRID
+
+      subc_n_rear = rrr.SC
+      idx = where(subc_n_rear eq (subc_n+1), count)
+
+      if count ne 0 then begin 
+
+        if ((subc_n+1) ne 11) and ((subc_n+1) ne 12) and ((subc_n+1) ne 13) and ((subc_n+1) ne 17) and ((subc_n+1) ne 18) and ((subc_n+1) ne 19) then begin ;; Detectors from 3a,b,c to 10a,b,c
+
+          grid_orient_rear = grid_orient_rear_all[idx]
+
+
+        endif else begin ;; Detectors 1a,b,c, 2a,b,c
+
+          grid_orient_rear = mean(grid_orient_rear_all[idx])
+ 
+        endelse
+
+      endif
+      
+      grid_orient_avg = (grid_orient_front + grid_orient_rear) / 2.
+
+      ;;------ Off-axis angle theta
+      flare_loc_deg = flare_loc / 3600. ;; Convert coordinates to deg
+      theta = flare_loc_deg[0] * cos(grid_orient_avg * !dtor) + flare_loc_deg[1] * sin(grid_orient_avg * !dtor)
+      
+      ;;------ Subcollimator transmission at low energies
+      idx = where(subc_n_all eq (subc_n+1), count)
+      if count eq 0 then message, 'File ' + fpath + ' does not contain information on subcollimator '+ STRTRIM(STRING(subc_n+1), 2)
+      
+      intercept = intercept_all[idx]
+      slope = slope_all[idx]
+      
+      value = intercept + slope * theta
+      
+      if value le 0. then message, "Transmission value for subcollimator " + STRTRIM(STRING(subc_n+1), 2) + " is <= 0. Please, check if the provided flare location is correct."
+        
+        subc_transmission[subc_n] = value
+      
+    endfor
+
   endelse
+  
+  return, subc_transmission
 
 end

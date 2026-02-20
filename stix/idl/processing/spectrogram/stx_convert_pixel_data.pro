@@ -621,7 +621,7 @@ pro  stx_convert_pixel_data, fits_path_data = fits_path_data, fits_path_bk = fit
 
   ;; Check if BKG or CFL detectors are used
   
-  idx_cfl = where(detectors_used eq 10, n_cfl)
+  idx_cfl = where(detectors_used eq 8, n_cfl)
   idx_bkg = where(detectors_used eq 9, n_bkg)
   
   if n_cfl eq 1 then message, "CFL detector can not be selected for spectral fitting."

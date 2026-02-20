@@ -217,14 +217,26 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
       slit_front = slit_to_pitch*pitch_front
       slit_rear = slit_to_pitch*pitch_rear
 
-
-      transm_front = stx_grid_transmission(pitch_front, slit_front, thickness_front, L, simple_transm=simple_transm, _extra=extra)
-      transm_rear = stx_grid_transmission(pitch_rear, slit_rear, thickness_rear, L, simple_transm=simple_transm, _extra=extra)
+      if ((subc_n+1) ne 11) and ((subc_n+1) ne 12) and ((subc_n+1) ne 13) and ((subc_n+1) ne 17) and ((subc_n+1) ne 18) and ((subc_n+1) ne 19) then begin ;; Detectors from 3a,b,c to 10a,b,c
+        transm_front = stx_grid_transmission(pitch_front, slit_front, thickness_front, L, simple_transm=simple_transm, _extra=extra)
+        transm_rear = stx_grid_transmission(pitch_rear, slit_rear, thickness_rear, L, simple_transm=simple_transm, _extra=extra)
+      endif else begin
+        transm_front = stx_grid_transmission(pitch_front, slit_front, thickness_front, L, simple_transm=simple_transm, ds=0, dh=0, _extra=extra)
+        transm_rear = stx_grid_transmission(pitch_rear, slit_rear, thickness_rear, L, simple_transm=simple_transm, ds=0, dh=0, _extra=extra)
+      endelse
 
       subc_transmission[*,subc_n] = transm_front * transm_rear
-     
       
     endfor
+    
+;    ;; Multiply by transmission of Kapton grid covers  - only for detectors 1 and 2
+;    subc_index_1_2 = stx_label2ind(['1a','1b','1c','2a','2b','2c'])
+;    transmission = read_csv(loc_file( 'stix_transmission_grid_covers_extended.csv', path = getenv('STX_GRID') ))
+;    energy = transmission.FIELD1
+;    kapton_transm = transmission.FIELD2
+;
+;    grid_cover_transm = cmreplicate(10^(interpol(alog10(kapton_transm),alog10(energy),alog10(ph_in))), 6)
+;    subc_transmission[*,subc_index_1_2] = subc_transmission[*,subc_index_1_2] * grid_cover_transm
     
   endif else begin
     

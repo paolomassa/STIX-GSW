@@ -33,11 +33,6 @@
 ;                  number of background counts that are measured in the selected time and energy intervals
 ;   
 ;   elut_corr: if set, a correction based on a ELUT table is applied to the measured counts
-;   
-;   xy_flare: two-element array containing the coordinates of the estimated flare location (STIX coordinate frame, arcsec). 
-;             It is used for computing the grid transmission correction and the phase projection correction (the latter is
-;             perdomed in 'stx_calibrate_visibility'). If it is not provided, no correction is applied and the 
-;             corresponding field in the visibility structure is filled with NaN.
 ;             
 ;   sumcase: string indicating which pixels are summed for computing the visibilities (see the header of 
 ;            'stx_calibrate_pixel_data' for more information). Default, 'TOP+BOT'
@@ -73,26 +68,29 @@
 ;   - PHASE_SENSE: array containing the sense of the phase measured by the sub-collimator (-1 or 1 values)
 ;   - XYOFFSET: two-element array containing the coordinates of the center of the map to renconstruct from the
 ;               visibility values (it is contains the values passed in 'mapcenter')
-;   - XY_FLARE: two-element array containing the coordinates of the estimated flare location. It is used for computing
-;               the grid transmission correction and the phase projection correction. If 'xy_flare' is not passed,
-;               no correction is applied and the array is filled with NaN values
+;   - XY_FLARE: two-element array containing the coordinates of the estimated flare location (STIX coordinate frame, arcsec),
+;               which is used for computing the grid transmission correction. It is initialized with NaN values.
+;               If no correction is applied later (see stx_calibrate_visibility.pro), it remains filled with NaNs.
+;               Otherwise, it will contain the coordinates of the location that is used for grid transmission correction 
+;               within the visibility amplitude calibration.
 ;   - CALIBRATED: 0 if the values of the visibility amplitudes and phases are not calibrated, 1 otherwise
 ;
 ; HISTORY: August 2022, Massa P., created
+;          January 2026, Massa P., removed 'xy_flare' keyword. Grid tranmssion correction should not be performed
+;                                  at this stage
 ;
 ; CONTACT:
-;   paolo.massa@wku.edu
+;   paolo.massa@fhnw.ch
 ;-
 function stx_construct_visibility, path_sci_file, time_range, energy_range, mapcenter, path_bkg_file=path_bkg_file, $
-                                   elut_corr=elut_corr, xy_flare=xy_flare, $
-                                   sumcase=sumcase, f2r_sep=f2r_sep, silent=silent, $
+                                   elut_corr=elut_corr, sumcase=sumcase, f2r_sep=f2r_sep, silent=silent, $
                                    subc_index=subc_index, no_small=no_small, no_rcr_check=no_rcr_check, _extra=extra
 
 ;;************** Construct a 'stx_pixel_data_summed' structure
                              
 pixel_data_summed = stx_construct_pixel_data_summed(path_sci_file, time_range, energy_range, $
                                                     path_bkg_file=path_bkg_file, $
-                                                    elut_corr=elut_corr, xy_flare=xy_flare, subc_index=subc_index, $
+                                                    elut_corr=elut_corr, subc_index=subc_index, $
                                                     sumcase=sumcase, silent=silent,no_small=no_small, $
                                                     no_rcr_check=no_rcr_check, _extra=extra)
 

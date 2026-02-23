@@ -6,7 +6,7 @@
 ;
 ; PURPOSE:
 ;
-;   Compute the transmission of a STIX subcollimator corrected for internal shadowing
+;   Compute the transmission of a STIX subcollimator using a linear fit of CFL-calibrated data
 ;
 ; CALLING SEQUENCE:
 ;
@@ -16,101 +16,152 @@
 ;
 ;   flare_loc: bidimensional array containing the X and Y coordinate of the flare location
 ;             (arcsec, in the STIX coordinate frame)
-;
+;             
 ;   ph_in: an array of photon energies [keV] (restricted to range 1-1000)
-;
-; KEYWORDS:
-; 
-;   simple_transm: if set a simplified version of the grid transmission is computed
 ;
 ; OUTPUTS:
 ;
-;   A float number that represent the subcollimator transmission value
+;   Transmission value for every subcollimator
 ;
-; HISTORY: August 2022, Massa P., first version (working only for detectors 3 to 10)
-;          11-Jul-2023, ECMD (Graz), updated following Recipe for STIX Flux and Amplitude Calibration (8-Nov 2022 gh)
-;                                    to include transparency and corner cutting for pure Tungsten grids
-;          24-Oct-2023, ECMD (Graz), added default to calculate low energy approximation if no input photon energies are passed
-;          31-Oct-2023, Massa P., added 'simple_transm' keyword to compute a simple version of the grid transmission
-;                                 (temporary solution used for imaging)
-;          12-Jun-2024, Massa P., corrected bug in the definition of grid orientation to be used for computing 
-;                                 the offset angle of the flare location relative to the slats.
+; KEYWORDS:
+;   
+;   ds: float. Width of the wedge model (in mm)
+;   
+;   dh: float. Hight of the wedge model (in mm)
+;   
+;   simple_transm: if set, the energy-dependence of the grid transmission is not considered
+;   
+;   silent: if set, no message is displayed
+;
+; HISTORY: May 2025, Massa P., based on the previous version by ECMD.
+;                    Working only for detectors 3 to 10. 
 ;          
 ; CONTACT:
-;   paolo.massa@wku.edu
+;   paolo.massa@fhnw.ch
 ;-
 
 
-function stx_subc_transmission, flare_loc, ph_in, flux = flux, simple_transm = simple_transm, silent = silent
+function stx_subc_transmission, flare_loc, ph_in, ds=ds, dh=dh, simple_transm = simple_transm, silent = silent
 
-  restore,loc_file( 'grid_temp.sav', path = getenv('STX_GRID') )
-  fff=read_ascii(loc_file( 'grid_param_front.txt', path = getenv('STX_GRID') ),temp=grid_temp)
-  rrr=read_ascii(loc_file( 'grid_param_rear.txt', path = getenv('STX_GRID') ),temp=grid_temp)
+  ;; Parameters of the wedge grid transmission model. The values are derived from fitting of STIX observation
+  default, ds, 5e-3
+  default, dh, 5e-2
 
-; To determine the transmission through the tungsten slats a Linear Attenuation Coefficient [mm-1] 
-; (1/absorption length in mm) is estimated for an each expected incoming photon energy and passed to stx_grid_transmission. 
-; The mass attenuation coefficient [cm^2/gm] is calculated using the xcom tabulated values in xsec.pro 
-; and a value of 19.3 g/cm3 is used for the density of tungsten. This is then divided by 10 to convert from [cm-1] to [mm-1].
-;
-; For backwards compatibility if no photon energy array is passed in the transmission is calculated for 1 keV
-; (the lowest tabulated value). This should provide a reasonable approximation to the previously assumed 
-; fully opaque grids. 
+  ; To determine the transmission through the tungsten slats a Linear Attenuation Coefficient [mm-1]
+  ; (1/absorption length in mm) is estimated for an each expected incoming photon energy and passed to stx_grid_transmission.
+  ; The mass attenuation coefficient [cm^2/gm] is calculated using the xcom tabulated values in xsec.pro
+  ; and a value of 19.3 g/cm3 is used for the density of tungsten. This is then divided by 10 to convert from [cm-1] to [mm-1].
+  ;
+  ; For backwards compatibility if no photon energy array is passed in the transmission is calculated for 1 keV
+  ; (the lowest tabulated value). This should provide a reasonable approximation to the previously assumed
+  ; fully opaque grids.
 
   if ~keyword_set(ph_in) then begin
     ph_in = 1.
-    if ~keyword_set(silent) then begin 
-    if ~keyword_set(simple_transm) then message, 'No photon energies passed, calculating low energy approximation at 1 keV.', /info $
-    else message, 'Simple grid transmission selected, calculating opaque approximation.', /info
+    if ~keyword_set(silent) then begin
+      if ~keyword_set(simple_transm) then message, 'No photon energies passed, calculating low energy approximation at 1 keV.', /info $
+      else message, 'Simple grid transmission selected, calculating opaque approximation.', /info
     endif
   endif
 
 
-  transm = fltarr(n_elements(ph_in), 32) ; the tranmission is calculated 
+  ;; Read grid orientation. It is used to compute off-axis angle
+  restore,loc_file( 'grid_temp.sav', path = getenv('STX_GRID') )
+  fff=read_ascii(loc_file( 'grid_param_front.txt', path = getenv('STX_GRID') ),temp=grid_temp)
+  rrr=read_ascii(loc_file( 'grid_param_rear.txt', path = getenv('STX_GRID') ),temp=grid_temp)
+  
+  ;; Orientation of the slits of the grid as seen from the detector side
+  grid_orient_front_all = fff.o 
+  grid_orient_rear_all = rrr.o
+  
+  pitch_front_all = fff.P
+  pitch_rear_all = rrr.P
+  thickness_front_all = fff.THICK
+  thickness_rear_all = rrr.THICK
 
-  mass_attenuation = xsec(ph_in, (Element2Z('W'))[0], 'AB', /cm2perg, error=error, use_xcom=1)
-  gmcm = 19.30
+  subc_n_front = fff.SC
+  subc_n_rear = rrr.SC
+  
+  grid_orient_front = fltarr(32)
+  grid_orient_rear = fltarr(32)
+  pitch_front = fltarr(32)
+  pitch_rear = fltarr(32)
+  thickness_front = fltarr(32)
+  thickness_rear = fltarr(32)
+  
+  for subc_n=0,31 do begin
+    
+    ;; Front grid
+    subc_n_front = fff.SC
+    idx = where(subc_n_front eq (subc_n+1), count)
+    if count eq 1 then begin
+      
+      grid_orient_front[subc_n] = grid_orient_front_all[idx]
+      pitch_front[subc_n] = pitch_front_all[idx]
+      thickness_front[subc_n] = thickness_front_all[idx]
+    
+    endif else begin
+      
+      grid_orient_front[subc_n] = grid_orient_front_all[idx[0]]
+      pitch_front[subc_n] = pitch_front_all[idx[0]]
+      thickness_front[subc_n] = thickness_front_all[idx[0]]
+      
+    endelse
+    
+    ;; Rear grid
+    subc_n_rear = rrr.SC
+    idx = where(subc_n_rear eq (subc_n+1), count)
+    if count eq 1 then begin
 
-  linear_attenuation = mass_attenuation*gmcm/10.
+      grid_orient_rear[subc_n] = grid_orient_rear_all[idx]
+      pitch_rear[subc_n] = pitch_rear_all[idx]
+      thickness_rear[subc_n] = thickness_rear_all[idx]
 
+    endif else begin
 
-  grid_orient_front = fff.o ;; Orientation of the slits of the grid as seen from the detector side
-  grid_pitch_front  = fff.p
-  grid_slit_front   = fff.slit
-  grid_thick_front  = fff.thick
-  bridge_width_front = fff.bwidth
-  bridge_pitch_front = fff.bpitch
+      grid_orient_rear[subc_n] = grid_orient_rear_all[idx[0]]
+      pitch_rear[subc_n] = pitch_rear_all[idx[0]]
+      thickness_rear[subc_n] = thickness_rear_all[idx[0]]
 
-  grid_orient_rear = rrr.o ;; Orientation of the slits of the grid as seen from the detector side
-  grid_pitch_rear  = rrr.p
-  grid_slit_rear   = rrr.slit
-  grid_thick_rear  = rrr.thick
-  bridge_width_rear = rrr.bwidth
-  bridge_pitch_rear = rrr.bpitch
+    endelse
+    
+  endfor  
+  
+  grid_orient_avg = (grid_orient_front + grid_orient_rear) / 2.
 
+  ;; Off-axis angle
+  flare_loc_deg = flare_loc / 3600. ;; Convert coordinates to deg
+  theta = flare_loc_deg[0] * cos(grid_orient_avg * !dtor) + flare_loc_deg[1] * sin(grid_orient_avg * !dtor)
 
-  sc = fff.sc
+  ;; Read intercept and slope of the transmission linear fits
+  fpath = loc_file( 'CFL_subcoll_transmission.txt', path = getenv('STX_GRID') )
+  readcol, fpath,subc_n,subc_label,intercept,slope,$
+    skipline = 1, format = 'I,A,F,F', /silent
+  
+  subc_transm = intercept + slope * theta
+  
+  if ~keyword_set(simple_transm) then begin
+    
+    ;; Compute slit-to-pitch ratio as the sqrt of the subcoll. transmission
+    slit_to_pitch = sqrt(subc_transm)
 
-  for i=0,n_elements(grid_pitch_front)-1 do begin
+    slit_front = slit_to_pitch*pitch_front
+    slit_rear = slit_to_pitch*pitch_rear
 
-    ;; Exclude detectors 1 and 2
-    if (sc[i] ne 11) and (sc[i] ne 12) and (sc[i] ne 13) and (sc[i] ne 17) and (sc[i] ne 18) and (sc[i] ne 19) then begin
+    ;; Compute absorption
+    mass_attenuation = xsec(ph_in, (Element2Z('W'))[0], 'AB', /cm2perg, error=error, use_xcom=1)
+    gmcm = 19.30
+    L = 1. / (mass_attenuation*gmcm/10.)
 
-      transm_front = stx_grid_transmission(flare_loc[0], flare_loc[1], grid_orient_front[i], $
-        grid_pitch_front[i], grid_slit_front[i], grid_thick_front[i], bridge_width_front[i], bridge_pitch_front[i], $
-        linear_attenuation, flux = flux, simple_transm = simple_transm)
-
-      transm_rear  = stx_grid_transmission(flare_loc[0], flare_loc[1], grid_orient_rear[i], $
-        grid_pitch_rear[i], grid_slit_rear[i], grid_thick_rear[i], bridge_width_rear[i], bridge_pitch_rear[i], $
-        linear_attenuation, flux = flux, simple_transm = simple_transm)
-
-      transm[*,sc[i]-1] = transm_front * transm_rear
-
-    endif
-
-  endfor
-
-  transm[where(transm eq 0.)] = 0.25
-
-  return, transm
+    transm_front = stx_grid_transmission(pitch_front, slit_front, thickness_front, L, ds, dh)
+    transm_rear = stx_grid_transmission(pitch_rear, slit_rear, thickness_rear, L, ds, dh)
+    
+    return, transm_front * transm_rear
+  
+  endif else begin
+    
+    return, subc_transm
+    
+  endelse
 
 end

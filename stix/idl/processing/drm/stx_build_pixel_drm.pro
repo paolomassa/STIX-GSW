@@ -95,7 +95,7 @@ function stx_build_pixel_drm, ct_energy_edges, pixel_mask, ph_energy_edges = ph_
   scale_factor  = total_area/drm.area
 
   ;scale the relevant parameters
-  drm.area *= scale_factor*rcr_factor*dist_factor
+  drm.area *= scale_factor*rcr_factor*dist_factor 
 
   ;XSPEC DRM is scaled by area
   if keyword_set(xspec) then begin

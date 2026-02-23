@@ -46,20 +46,36 @@
 ; HISTORY: August 2022, Massa P., created
 ;          July 2023, Massa P., removed visibility phase 'projection correction' since the new definition of 
 ;          (u,v)-points is adopted (see stx_uv_points).
+;          February 2026, Massa P., corrected amplitude calibration based on "The STIX Imaging Concept" paper
 ;
 ; CONTACT:
 ;   paolo.massa@wku.edu
 ;-
 
-function stx_calibrate_visibility, vis, phase_calib_factors=phase_calib_factors, amp_calib_factors=amp_calib_factors, $
-                                        syserr_sigamp = syserr_sigamp, r2d_sep=r2d_sep, f2r_sep=f2r_sep
+function stx_calibrate_visibility, vis, xy_flare=xy_flare, phase_calib_factors=phase_calib_factors, amp_calib_factors=amp_calib_factors, $
+                                   syserr_sigamp = syserr_sigamp, r2d_sep=r2d_sep, f2r_sep=f2r_sep
 
 default, f2r_sep, 545.30
 default, r2d_sep, 47.78
 
 n_vis = n_elements(vis)
 
-modulation_efficiency = !pi^3./(8.*sqrt(2.)) 
+;; Compute subcollimator transmission to perform amplitude modulation
+if keyword_set(xy_flare) then begin
+  
+  subc_transm = stx_subc_transmission(xy_flare, /simple_transm)
+  
+endif else begin
+  
+  subc_transm = stx_subc_transmission([0.,0.], /simple_transm)
+  
+endelse
+
+subc_transm = subc_transm[vis.ISC - 1]
+slit2pitch = sqrt(subc_transm)
+
+modulation_efficiency = !pi^3./(8.*sqrt(2.)) / sin(!pi * slit2pitch)^2
+
 
 ;; Grid phase correction
 tmp = read_csv(loc_file( 'GridCorrection.csv', path = getenv('STX_VIS_PHASE') ), header=header, table_header=tableheader, n_table_header=2 )
@@ -103,6 +119,8 @@ calibrated_vis = vis
 calibrated_vis.obsvis = calibrated_obsvis
 calibrated_vis.sigamp = calibrated_sigamp
 calibrated_vis.CALIBRATED = 1
+
+if keyword_set(xy_flare) then calibrated_vis.XY_FLARE = xy_flare
 
 return, calibrated_vis
 

@@ -51,56 +51,75 @@
 ;-
 
 
-function stx_grid_transmission, x_flare, y_flare, grid_orient, grid_pitch, grid_slit, grid_thick, $
-  bridge_width, bridge_pitch, linear_attenuation, flux = flux, simple_transm = simple_transm
+function stx_grid_transmission, pitch, slit, H, L, ds, dh
 
-  default, flux, 1
+  n_energies = n_elements(L)
+  n_subc = n_elements(pitch)
 
-  if ~keyword_set(simple_transm) then begin
+  slit_rep = transpose(cmreplicate(slit, n_energies))
+  pitch_rep = transpose(cmreplicate(pitch, n_energies))
+  H_rep = transpose(cmreplicate(H, n_energies))
+  L_rep = cmreplicate(L, n_subc)
   
-    bridge_factor = 1.0 - f_div(bridge_width,bridge_pitch)
   
-    ;; Distance of the flare on the axis perpendicular to the grid orientation
-    flare_dist   = abs(x_flare * cos(grid_orient * !dtor) + y_flare * sin(grid_orient * !dtor))
-  
-    ;; Internal shadowing
-    shadow_width = grid_thick  * tan(flare_dist / 3600. * !dtor)
-  
-    nenergies = n_elements(linear_attenuation)
-  
-    slat_optical_depth = grid_thick * linear_attenuation
-  
-    slat_transmission = exp(-slat_optical_depth)
-  
-    ;calculate the transmission through the slat edge
-    edge_transmission = (1. - slat_transmission) /slat_optical_depth
-  
-    grid_slit_e = replicate(grid_slit, nenergies)
-    shadow_width_e = replicate(shadow_width, nenergies)
-    grid_pitch_e =  replicate(grid_pitch, nenergies)
-  
-    effective_slit_width = grid_slit_e + shadow_width_e * (1. - 2.* (1- edge_transmission)/(1. - slat_transmission))
-  
-    flux_calibration = 2*(slat_transmission + (1.- slat_transmission)*effective_slit_width*bridge_factor/grid_pitch_e)
-  
-    amplitude_calibration = (1. - slat_transmission) * bridge_factor * sin(!pi * effective_slit_width / grid_pitch_e )
-  
-    transmission = keyword_set(flux) ? flux_calibration : amplitude_calibration 
+  g0 = slit_rep / pitch_rep + (pitch_rep - slit_rep) / pitch_rep * exp( - H_rep / L_rep )
+  ttt = L_rep / dh * ( 1. - exp(- dh / L_rep ) )
+  g1 = 2. * ds / pitch_rep * (ttt - exp( - H_rep / L_rep ))
 
-    ; factors are relative to 0.5 value for ideal grids
-    return, transmission/2.
+  return, g0 + g1
 
-  endif else begin
-    
-    ;; Distance of the flare on the axis perpendicular to the grid orientation
-    flare_dist   = abs(x_flare * cos(grid_orient * !dtor) + y_flare * sin(grid_orient * !dtor))
 
-    ;; Internal shadowing
-    shadow_width = grid_thick  * tan(flare_dist / 3600. * !dtor)
 
-    return, (grid_slit - shadow_width) / grid_pitch
-    
-  endelse
+;x_flare, y_flare, grid_orient, grid_pitch, grid_slit, grid_thick, $
+;  bridge_width, bridge_pitch, linear_attenuation, flux = flux, simple_transm = simple_transm
+;
+;  default, flux, 1
+;
+;  if ~keyword_set(simple_transm) then begin
+;  
+;    bridge_factor = 1.0 - f_div(bridge_width,bridge_pitch)
+;  
+;    ;; Distance of the flare on the axis perpendicular to the grid orientation
+;    flare_dist   = abs(x_flare * cos(grid_orient * !dtor) + y_flare * sin(grid_orient * !dtor))
+;  
+;    ;; Internal shadowing
+;    shadow_width = grid_thick  * tan(flare_dist / 3600. * !dtor)
+;  
+;    nenergies = n_elements(linear_attenuation)
+;  
+;    slat_optical_depth = grid_thick * linear_attenuation
+;  
+;    slat_transmission = exp(-slat_optical_depth)
+;  
+;    ;calculate the transmission through the slat edge
+;    edge_transmission = (1. - slat_transmission) /slat_optical_depth
+;  
+;    grid_slit_e = replicate(grid_slit, nenergies)
+;    shadow_width_e = replicate(shadow_width, nenergies)
+;    grid_pitch_e =  replicate(grid_pitch, nenergies)
+;  
+;    effective_slit_width = grid_slit_e + shadow_width_e * (1. - 2.* (1- edge_transmission)/(1. - slat_transmission))
+;  
+;    flux_calibration = 2*(slat_transmission + (1.- slat_transmission)*effective_slit_width*bridge_factor/grid_pitch_e)
+;  
+;    amplitude_calibration = (1. - slat_transmission) * bridge_factor * sin(!pi * effective_slit_width / grid_pitch_e )
+;  
+;    transmission = keyword_set(flux) ? flux_calibration : amplitude_calibration 
+;
+;    ; factors are relative to 0.5 value for ideal grids
+;    return, transmission/2.
+;
+;  endif else begin
+;    
+;    ;; Distance of the flare on the axis perpendicular to the grid orientation
+;    flare_dist   = abs(x_flare * cos(grid_orient * !dtor) + y_flare * sin(grid_orient * !dtor))
+;
+;    ;; Internal shadowing
+;    shadow_width = grid_thick  * tan(flare_dist / 3600. * !dtor)
+;
+;    return, (grid_slit - shadow_width) / grid_pitch
+;    
+;  endelse
   
   
 

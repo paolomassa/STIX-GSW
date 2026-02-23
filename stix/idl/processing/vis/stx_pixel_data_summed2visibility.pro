@@ -46,13 +46,15 @@
 ;   - PHASE_SENSE: array containing the sense of the phase measured by the sub-collimator (-1 or 1 values)
 ;   - XYOFFSET: two-element array containing the coordinates of the center of the map to renconstruct from the
 ;                visibiity values (STIX coordinate frame, arcsec)
-;   - XY_FLARE: two-element array containing the coordinates of the estimated flare location (STIX coordinate frame, arcsec). 
-;               It is used for computing the grid transmission correction and the phase projection correction. 
-;               If the 'xy_flare' field of the  input 'stx_pixel_data_summed' structure contains NaN values, no correction is applied 
+;   - XY_FLARE: two-element array containing the coordinates of the estimated flare location (STIX coordinate frame, arcsec), 
+;               which is used for computing the grid transmission correction. It is initialized as [0.,0.]. 
+;               If no correction is applied later (see stx_calibrate_visibility.pro), it remains filled with [0.,0.]. 
+;               Otherwise, it will contain the coordinates of the location that is used for grid transmission correction.
 ;   - CALIBRATED: 0 if the values of the visibility amplitudes and phases are not calibrated, 1 otherwise   
 ;   
 ; HISTORY: August 2022, Massa P., created
 ;          July 2023, Massa P., made it compatible with the new definition of (u,v)-points (see stx_uv_points)
+;          February 2026, Massa P., made it compatible with new visibility amplitude calibration
 ;
 ; CONTACT:
 ;   paolo.massa@wku.edu
@@ -170,7 +172,6 @@ vis.ENERGY_RANGE = pixel_data_summed.ENERGY_RANGE
 vis.TIME_RANGE   = pixel_data_summed.TIME_RANGE
 vis.PHASE_SENSE  = subc_str.PHASE
 vis.XYOFFSET     = mapcenter
-vis.XY_FLARE     = pixel_data_summed.XY_FLARE
 
 return, vis
 

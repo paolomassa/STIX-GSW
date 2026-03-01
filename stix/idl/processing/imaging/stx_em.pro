@@ -39,11 +39,12 @@
 ;          August 2022, Massa P., made it compatible with the up-to-date imaging software and added backrgound correction
 ;                       in the EM iterative scheme
 ;          July 2023, Massa P., made it compatible with the new definition of (u,v)-points (see stx_uv_points)
+;          March 2026, Massa P., new subcollimator transmission is implemented
 ;             
-;CONTACT: massa.p@dima.unige.it
+;CONTACT: paolo.massa@fhnw.ch
 
 FUNCTION stx_em, pixel_data_summed, aux_data, imsize=imsize, pixel=pixel, $
-                 mapcenter=mapcenter, subc_index=subc_index, $
+                 mapcenter=mapcenter, xy_flare=xy_flare, subc_index=subc_index, $
                  maxiter=maxiter, tolerance=tolerance, silent=silent, makemap=makemap
 
 default, subc_index, stx_label2ind(['3a','3b','3c','4a','4b','4c','5a','5b','5c','6a','6b','6c',$
@@ -56,7 +57,7 @@ default, tolerance, 0.001
 default, silent, 0
 default, makemap, 0
 default, mapcenter, [0, 0]
-
+default, xy_flare, [0, 0]
 
 ; input parameters control
 if imsize[0] ne imsize[1] then message, 'Error: imsize must be square.'
@@ -114,7 +115,9 @@ v = uv_data.v
 ;;**************** Transmission matrix
 
 ; Creation of the matrix 'H' used in the EM algorithm
-H = stx_map2pixelabcd_matrix(imsize, pixel, u, v, phase_corr, xyoffset = mapcenter, SUMCASE = sumcase)
+subc_transm = stx_subc_transmission(xy_flare, /simple_transm)
+subc_transm = subc_transm[subc_index]
+H = stx_map2pixelabcd_matrix(imsize, pixel, u, v, phase_corr, subc_transm, xyoffset = mapcenter, SUMCASE = sumcase)
 
 ; Vectorization of the matrix 'pixel_data.counts' containing the number of counts recorded
 ; by STIX pixels

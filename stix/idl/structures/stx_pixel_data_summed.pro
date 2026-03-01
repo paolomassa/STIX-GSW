@@ -18,9 +18,10 @@
 ;
 ;
 ; HISTORY: July 2022, Massa P., created
+;          January 2026, Massa P., removed 'xy_flare' entry as grid transmission correction is not applied anymore to the raw counts
 ;
 ; CONTACT:
-;   paolo.massa@wku.edu
+;   paolo.massa@fhnw.ch
 ;-
 
 
@@ -43,7 +44,6 @@ function stx_pixel_data_summed
                                                         ; no systematic errors are included)
     tot_counts_bkg        : double(0), $                ; Estimate of the total number of background counts recorded during the flaring event
     rcr                   : byte(0), $                  ; Rate Control Regime (RCR) status
-    xy_flare              : fltarr(2), $                ; Estimate of the flare location used for grids' transmission correction
     sumcase               : string(""), $               ; Which pixels are summed: 'TOP' (top row), 'BOT' (bottom row), 'SMALL' (small pixels)
                                                         ;                          'TOP+BOT' (top and bottom row), 'ALL', (all pixels)
     detector_masks        : bytarr(32) $                ; array containing information on the detectors used for the measurement 

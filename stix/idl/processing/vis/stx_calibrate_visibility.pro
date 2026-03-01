@@ -19,6 +19,9 @@
 ;
 ; KEYWORDS:
 ; 
+;   xy_flare: two-element array containing the coordinates of the estimated flare location (STIX coordinate frame, arcsec).
+;             It is used for computing the grid transmission correction within the visibility amplitude calibration. Default, (0,0)
+; 
 ;   phase_calib_factors: 32-element array containing the phase calibration factors for each detector (degrees).
 ;                        The default phase calibration factors consist of four terms:
 ;                         - a grid correction factor, which keeps into account the phase of the front and the rear grid;
@@ -46,20 +49,29 @@
 ; HISTORY: August 2022, Massa P., created
 ;          July 2023, Massa P., removed visibility phase 'projection correction' since the new definition of 
 ;          (u,v)-points is adopted (see stx_uv_points).
+;          February 2026, Massa P., new visibility amplitude calibration is implemented
 ;
 ; CONTACT:
 ;   paolo.massa@wku.edu
 ;-
 
-function stx_calibrate_visibility, vis, phase_calib_factors=phase_calib_factors, amp_calib_factors=amp_calib_factors, $
-                                        syserr_sigamp = syserr_sigamp, r2d_sep=r2d_sep, f2r_sep=f2r_sep
+function stx_calibrate_visibility, vis, xy_flare=xy_flare, phase_calib_factors=phase_calib_factors, amp_calib_factors=amp_calib_factors, $
+                                   syserr_sigamp = syserr_sigamp, r2d_sep=r2d_sep, f2r_sep=f2r_sep
 
 default, f2r_sep, 545.30
 default, r2d_sep, 47.78
+default, xy_flare, [0.,0.]
 
 n_vis = n_elements(vis)
 
-modulation_efficiency = !pi^3./(8.*sqrt(2.)) 
+;; Compute subcollimator transmission to perform amplitude modulation
+subc_transm = stx_subc_transmission(xy_flare, /simple_transm)
+
+subc_transm = subc_transm[vis.ISC - 1]
+slit2pitch = sqrt(subc_transm)
+
+modulation_efficiency = !pi^3./(8.*sqrt(2.)) / sin(!pi * slit2pitch)^2
+
 
 ;; Grid phase correction
 tmp = read_csv(loc_file( 'GridCorrection.csv', path = getenv('STX_VIS_PHASE') ), header=header, table_header=tableheader, n_table_header=2 )
@@ -103,6 +115,8 @@ calibrated_vis = vis
 calibrated_vis.obsvis = calibrated_obsvis
 calibrated_vis.sigamp = calibrated_sigamp
 calibrated_vis.CALIBRATED = 1
+
+calibrated_vis.XY_FLARE = xy_flare
 
 return, calibrated_vis
 

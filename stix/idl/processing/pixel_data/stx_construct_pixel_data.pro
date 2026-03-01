@@ -39,8 +39,6 @@
 ;     - COUNTS_ERROR_BKG: array 32x12 containing the errors (statistics + compression) associated with the estimate of the 
 ;                         number of background counts recorded by the detector pixels in the selected time and energy intervals
 ;     - LIVE_TIME_BKG: 32-element array containing the live time of each detector for the background measurement
-;     - XY_FLARE: two-element array containing the X and Y coordinates of the estimated flare location (STIX coordinate frame, arcsec).
-;                   If 'xy_flare' is not passed, it is filled with NaN values
 ;     - RCR: rate control regime status in the selcted time interval. If the RCR changes in that interval, an error is thrown
 ;     - PIXEL_MASKS: matrix containing info on the pixels used in the selected time interval
 ;     - DETECTOR_MASKS: matrix containing information on the detectors used in the selected time interval
@@ -52,8 +50,6 @@
 ;
 ;   elut_corr: if set, a correction based on a ELUT table is applied to the measured counts
 ;   
-;   xy_flare: two-element array containing the X and Y coordinates of the estimated flare location
-;             (STIX coordinate frame, arcsec). If passed, the grid transmission correction is computed
 ;   
 ;   subc_index: array containing the indices of the selected imaging detectors. Used only for plotting the lightcurve by means of 
 ;             'stx_plot_selected_time_range'. Default, indices of
@@ -77,13 +73,14 @@
 ;          May 2023, Massa P., do not call 'stx_plot_selected_time_range' if the science fits file contains a single time bin
 ;          October 2023, Massa P., fixed bug in the selection of the energy bin indices
 ;          November 2023, Massa P., use simplified version of the subcollimator transmission (temporary solution)
+;          January 2026, Massa P., removed 'xy_flare' keyword and grid transmission correction
 ;
 ; CONTACT:
-;   paolo.massa@wku.edu
+;   paolo.massa@fhnw.ch
 ;-
 
 function stx_construct_pixel_data, path_sci_file, time_range, energy_range, elut_corr=elut_corr, $
-                                   path_bkg_file=path_bkg_file, xy_flare=xy_flare, subc_index=subc_index, $
+                                   path_bkg_file=path_bkg_file, subc_index=subc_index, $
                                    sumcase=sumcase, silent=silent, no_small=no_small, no_rcr_check=no_rcr_check, $
                                    shift_duration=shift_duration, _extra=extra
 
@@ -368,22 +365,6 @@ if keyword_set(path_bkg_file) then begin
 
 endif
 
-;;************** Correction for grid internal shadowing
-
-if keyword_set(xy_flare) then begin
-
-  ;; Use simplified version of the grid transmission (temporary solution)
-  subc_transmission     = stx_subc_transmission(xy_flare, /simple_transm)
-  subc_transmission_bkg = stx_subc_transmission([0.,0.], /simple_transm)
-  for i=0,31 do begin
-    
-    counts[*,i]       = counts[*,i]/subc_transmission[i]*0.25
-    counts_error[*,i] = counts_error[*,i]/subc_transmission[i]*0.25
-
-  endfor
-
-endif
-
 ;;**************  RCR
 
 rcr = data.rcr[time_ind]
@@ -439,12 +420,6 @@ if keyword_set(path_bkg_file) then begin
   pixel_data.COUNTS_ERROR_BKG = transpose(counts_error_bkg)
   
 endif
-
-if ~keyword_set(xy_flare) then begin
-  pixel_data.XY_FLARE = [!VALUES.F_NaN,!VALUES.F_NaN]
-endif else begin
-  pixel_data.XY_FLARE = xy_flare
-endelse
 
 pixel_data.RCR            = rcr[0]
 

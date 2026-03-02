@@ -79,7 +79,15 @@ modulation_efficiency = !pi^3./(8.*sqrt(2.)) / sin(!pi * slit2pitch)^2
 
 ;; Grid phase correction
 tmp = read_csv(loc_file( 'GridCorrection.csv', path = getenv('STX_VIS_PHASE') ), header=header, table_header=tableheader, n_table_header=2 )
-grid_phase_corr = tmp.field2[vis.ISC - 1]
+;grid_phase_corr = tmp.field2[vis.ISC - 1]
+grid_phase_corr = tmp.field2
+idx_2a = stx_label2ind('2a')
+idx_2c = stx_label2ind('2c')
+idx_1b = stx_label2ind('1b')
+grid_phase_corr[idx_2a] += 26.
+grid_phase_corr[idx_2c] += 9.
+grid_phase_corr[idx_1b] += 6.
+grid_phase_corr = grid_phase_corr[vis.ISC - 1]
 
 ;; "Ad hoc" phase correction (for removing residual errors)
 tmp = read_csv(loc_file( 'PhaseCorrFactors.csv', path = getenv('STX_VIS_PHASE')), header=header, table_header=tableheader, n_table_header=3 )

@@ -229,15 +229,6 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
       
     endfor
     
-;    ;; Multiply by transmission of Kapton grid covers  - only for detectors 1 and 2
-;    subc_index_1_2 = stx_label2ind(['1a','1b','1c','2a','2b','2c'])
-;    transmission = read_csv(loc_file( 'stix_transmission_grid_covers_extended.csv', path = getenv('STX_GRID') ))
-;    energy = transmission.FIELD1
-;    kapton_transm = transmission.FIELD2
-;
-;    grid_cover_transm = cmreplicate(10^(interpol(alog10(kapton_transm),alog10(energy),alog10(ph_in))), 6)
-;    subc_transmission[*,subc_index_1_2] = subc_transmission[*,subc_index_1_2] * grid_cover_transm
-    
   endif else begin
     
     ;;************ SIMPLE GRID TRANSMISSION: NO ENERGY DEPENDENCE

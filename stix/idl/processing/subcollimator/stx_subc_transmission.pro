@@ -89,7 +89,7 @@ function stx_subc_transmission, flare_loc, ph_in, simple_transm = simple_transm,
     
   endif
   
-  subc_transmission = read_csv(fpath)
+  subc_transmission = read_csv(fpath, n_table_header=1)
   subc_n_all = subc_transmission.FIELD1
   subc_label = subc_transmission.FIELD2
   intercept_all = subc_transmission.FIELD3

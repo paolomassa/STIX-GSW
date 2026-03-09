@@ -75,7 +75,7 @@
 ;   - CALIBRATED: 0 if the values of the visibility amplitudes and phases are not calibrated, 1 otherwise
 ;
 ; HISTORY: August 2022, Massa P., created
-;          January 2026, Massa P., removed 'xy_flare' keyword. Grid tranmssion correction is used only for visibility amplitude calibration
+;          January 2026, Massa P., removed 'xy_flare' keyword. Grid transmission correction is used only for visibility amplitude calibration
 ;
 ; CONTACT:
 ;   paolo.massa@fhnw.ch

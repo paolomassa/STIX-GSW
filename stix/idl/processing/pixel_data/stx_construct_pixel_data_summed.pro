@@ -48,7 +48,7 @@
 ;   no_rcr_check: if set, control on RCR change during the selected time interval is not performed
 ;
 ; HISTORY: July 2022, Massa P., created
-;          January 2026, Massa P., removed 'xy_flare' keyword. Grid tranmssion correction is not performed 
+;          January 2026, Massa P., removed 'xy_flare' keyword. Grid transmission correction is not performed 
 ;                                  at this stage
 ;
 ; CONTACT:

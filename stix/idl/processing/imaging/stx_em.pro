@@ -166,7 +166,7 @@ x_im = reform(x, imsize[0],imsize[1])
 ;;**************** Create visibility structure to be used in 'stx_make_map'
 
 vis = stx_pixel_data_summed2visibility(pixel_data_summed,subc_index=subc_index, mapcenter=mapcenter)
-vis = stx_calibrate_visibility(vis)
+vis = stx_calibrate_visibility(vis, xy_flare=xy_flare)
 
 em_map = stx_make_map(x_im, aux_data, pixel, "EM", vis)
 

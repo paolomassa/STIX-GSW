@@ -56,14 +56,13 @@
 ;   - TOT_COUNTS_BKG: estimate of the total number of background counts recorded by the imaging subcollimators (selected with 'subc_index')
 ;                     in the considered time and energy interval
 ;   - RCR: Rate Control Regime status during the flare measurement
-;   - XY_FLARE: 2-element array containing the X and Y coordinates of the estimated flare location (STIX coordinate frame, arcsec).
-;               If 'xy_flare' is not passed, it is filled with NaN values
 ;   - SUMCASE: string indicating which pixels are summed (see above comment on 'sumcase' keyword for more details)
 ;   - DETECTOR_MASKS: 32-element array containing information on the detectors used for the measurement 
 ;                     (1 if the corresponding detector has been used, 0 otherwise)
 ;
 ; HISTORY: August 2022, Massa P., created
 ;          October 2023, Massa P., fixed bug in the estimation of the total number of bkg counts 
+;          January 2026, Massa P., removed 'xy_flare' entry as grid transmission correction is not applied anymore to the raw counts
 ;
 ; CONTACT:
 ;   paolo.massa@wku.edu
@@ -203,7 +202,6 @@ pixel_data_summed.COUNT_RATES_BKG = count_rates_bkg
 pixel_data_summed.COUNT_RATES_ERROR_BKG = count_rates_error_bkg
 pixel_data_summed.TOT_COUNTS_BKG = tot_counts_bkg
 pixel_data_summed.RCR            = pixel_data.RCR                
-pixel_data_summed.XY_FLARE       = pixel_data.XY_FLARE
 pixel_data_summed.SUMCASE        = sumcase
 pixel_data_summed.DETECTOR_MASKS = pixel_data.DETECTOR_MASKS
 

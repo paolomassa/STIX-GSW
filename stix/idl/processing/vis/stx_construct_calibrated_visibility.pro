@@ -32,8 +32,8 @@
 ;   elut_corr: if set, a correction based on a ELUT table is applied to the measured counts
 ;
 ;   xy_flare: two-element array containing the coordinates of the estimated flare location (STIX coordinate frame, arcsec).
-;             It is used for computing the grid transmission correction and the phase projection correction.
-;             If it is not provided, no correction is applied and the corresponding field in the visibility structure is filled with NaN.
+;             It is used for computing the grid transmission correction within the visibility amplitude calibration.
+;             If it is not provided, then the flare location is set equal to (0,0)
 ;
 ;   sumcase: string containing information on the pixels to be considered for computing the visibilities
 ;            (see the header of 'stx_sum_pixel_data' for more details).
@@ -70,7 +70,7 @@
 ; HISTORY: August 2022, Massa P., created
 ;
 ; CONTACT:
-;   paolo.massa@wku.edu
+;   paolo.massa@fhnw.ch
 ;-
 
 function stx_construct_calibrated_visibility, path_sci_file, time_range, energy_range, mapcenter, $
@@ -85,13 +85,12 @@ function stx_construct_calibrated_visibility, path_sci_file, time_range, energy_
 ;;*********** Create visibility structure
 
 vis = stx_construct_visibility(path_sci_file, time_range, energy_range, mapcenter, path_bkg_file=path_bkg_file, $
-                               elut_corr=elut_corr, xy_flare=xy_flare, $
-                               sumcase=sumcase, f2r_sep=f2r_sep, silent=silent, $
+                               elut_corr=elut_corr, sumcase=sumcase, f2r_sep=f2r_sep, silent=silent, $
                                subc_index=subc_index, no_small=no_small, no_rcr_check=no_rcr_check, _extra=extra)
 
 ;;*********** Calibrate visibility
 
-calibrated_vis = stx_calibrate_visibility(vis, phase_calib_factors=phase_calib_factors, $
+calibrated_vis = stx_calibrate_visibility(vis, xy_flare=xy_flare, phase_calib_factors=phase_calib_factors, $
                                           amp_calib_factors=amp_calib_factors, $
                                           syserr_sigamp = syserr_sigamp, r2d_sep=r2d_sep, f2r_sep=f2r_sep)
 

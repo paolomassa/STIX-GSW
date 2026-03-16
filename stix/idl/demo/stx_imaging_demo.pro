@@ -178,11 +178,9 @@ stop
 
 ; Expectation Maximization algorithm from STIX counts (see Massa P. et al (2019) for details). Takes as input a 
 ; summed pixel data structure
-pixel_data_summed = stx_construct_pixel_data_summed(path_sci_file, time_range, energy_range, path_bkg_file=path_bkg_file, $
-                                                    xy_flare=xy_flare, /silent)
+pixel_data_summed = stx_construct_pixel_data_summed(path_sci_file, time_range, energy_range, path_bkg_file=path_bkg_file, /silent)
 
-em_map = stx_em(pixel_data_summed, aux_data, imsize=imsize, pixel=pixel,$
-                mapcenter=mapcenter)
+em_map = stx_em(pixel_data_summed, aux_data, imsize=imsize, pixel=pixel, xy_flare=xy_flare, mapcenter=mapcenter)
 
 loadct,5,/silent
 window, 0

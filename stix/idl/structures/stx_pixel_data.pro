@@ -18,9 +18,10 @@
 ;
 ;
 ; HISTORY: July 2022, Massa P., created
+;          January 2026, Massa P., removed 'xy_flare' entry as grid transmission correction is not applied anymore to the raw counts
 ;
 ; CONTACT:
-;   paolo.massa@wku.edu
+;   paolo.massa@fhnw.ch
 ;-
 
 
@@ -35,7 +36,6 @@ function stx_pixel_data
     live_time_bkg         : fltarr(32), $               ; Live time of the 32 detectors during the background measurement
     counts_bkg            : dblarr(32,12), $            ; Counts recorded by the detector pixels during the background measurement (summed in time and energy)
     counts_error_bkg      : dblarr(32,12), $            ; Errors associated with the measured background counts (statistics + compression) 
-    xy_flare              : fltarr(2),  $               ; Estimate of the flare location used for grids' transmission correction
     rcr                   : byte(0), $                  ; Rate Control Regime (RCR) status
     pixel_masks           : bytarr(12), $               ; Matrix containing information on the pixels used for the measurement
     detector_masks        : bytarr(32) $                ; Matrix containing information on the detectors used for the measurement

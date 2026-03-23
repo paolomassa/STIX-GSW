@@ -41,6 +41,7 @@
 ;                     It is used to compute the amount of ELUT correction for all pixels.
 ;   - COUNTS_ELUT: array of dimension 4 (A,B,C,D) x number of rows (TOP, BOT, SMALL) x number of subcollimators x number of time bins containing the number of counts integrated in energy after ELUT correction. 
 ;                     It is used to compute the amount of ELUT correction for all pixels.
+;   - SP_INDEX: array containing the value of the spectral indices in the different energy bins 
 ; 
 ; KEYWORDS:
 ; 
@@ -49,6 +50,7 @@
 ;   SILENT: if set to 1, the spectrum plot is not displayed.
 ;
 ; HISTORY:
+;   March 2026, Massa P., first release
 ;
 ; CONTACT:
 ;   paolo.massa@fhnw.ch

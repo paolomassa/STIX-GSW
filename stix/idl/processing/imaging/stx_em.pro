@@ -46,7 +46,7 @@
 ;                       in the EM iterative scheme
 ;          July 2023, Massa P., made it compatible with the new definition of (u,v)-points (see stx_uv_points)
 ;          March 2026, Massa P., new subcollimator transmission is implemented
-;          April 22026, Massa P., made it compatible with the fact that bkg subtraction is performed in 'stx_construct_pixel_data'
+;          April 2026, Massa P., made it compatible with the fact that bkg subtraction is performed in 'stx_construct_pixel_data'
 ;             
 ;CONTACT: paolo.massa@fhnw.ch
 

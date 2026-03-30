@@ -20,7 +20,7 @@
 ; HISTORY: July 2022, Massa P., created
 ;          April 2025, Massa P., made it compatible with new ELUT correction. Bkg-subtraction is applied to the counts.
 ;                      Therefore, information on bkg is not stored anymore
-;          Fubruary 2026, Massa P., Removed 'xy_flare' keyword as grid transmission correction is not applied anymore to raw counts
+;          February 2026, Massa P., Removed 'xy_flare' keyword as grid transmission correction is not applied anymore to raw counts
 ;          March 2026, Massa P., updated to make it compatible with new ELUT correction.
 ;
 ; CONTACT:

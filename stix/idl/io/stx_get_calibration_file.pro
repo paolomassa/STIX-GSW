@@ -31,6 +31,7 @@
 ;
 ; :history:
 ;    24-Mar-2026 - Massa P. (FHNW), first release
+;    13-Apr-2026 - Massa P. (FHNW), updated to search for calibration files within 2 days before or after the input date
 ;-
 function stx_get_calibration_file, start_time, end_time, out_dir=out_dir, clobber=clobber
 
@@ -40,6 +41,7 @@ function stx_get_calibration_file, start_time, end_time, out_dir=out_dir, clobbe
   default, clobber, 0
 
   day_in_s = 86400.d ;; Number of seconds in a day. To be used later to identify the most appropriate calibration file
+  day_limit = 2 ;; Maximum number of days before or after the input date to consider when searching for a calibration file (arbitrary choice)
 
   site = 'http://dataarchive.stix.i4ds.net'
   date_path = get_fid(start_time,end_time,/full,delim='/')
@@ -50,12 +52,12 @@ function stx_get_calibration_file, start_time, end_time, out_dir=out_dir, clobbe
   found_files=sock_find(site,filter,path=path,count=count)
 
   if count eq 0 then begin
-    message, "No STIX calibration files found for this day ("+date_path[0]+"). Searching for calibration file which is closest in time.", /continue
+    message, [" ", " ", "No STIX calibration files found for this day ("+date_path[0]+"). Searching for calibration file which is closest in time.", " ", " "], /continue
     
-    ;; Forward in time (for 30 days max - arbitrary choice)
+    ;; Forward in time (for 2 days max - arbitrary choice)
     day_n_forward=1
     count_forward=0
-    while (day_n_forward le 30) and (count_forward eq 0) do begin
+    while (day_n_forward le day_limit) and (count_forward eq 0) do begin
       
       this_start_time_forward = anytim(anytim(start_time) + day_n_forward * day_in_s, /vms)
       this_end_time_forward   = anytim(anytim(end_time) + day_n_forward * day_in_s, /vms)
@@ -69,10 +71,12 @@ function stx_get_calibration_file, start_time, end_time, out_dir=out_dir, clobbe
       
     endwhile
     
-    ;; Backward in time (for 30 days max - arbitrary choice)
+    day_n_forward -= 1 ;; Remove 1 day to compensate that when the loop exits after finding a file, each counter is +1 from the actual day offset that produced the match.
+    
+    ;; Backward in time (for 2 days max - arbitrary choice)
     day_n_backward=1
     count_backward=0
-    while (day_n_backward le 30) and (count_backward eq 0) do begin
+    while (day_n_backward le day_limit) and (count_backward eq 0) do begin
       
       this_start_time_backward = anytim(anytim(start_time) - day_n_backward * day_in_s, /vms)
       this_end_time_backward   = anytim(anytim(end_time) - day_n_backward * day_in_s, /vms)
@@ -86,9 +90,11 @@ function stx_get_calibration_file, start_time, end_time, out_dir=out_dir, clobbe
 
     endwhile
     
+    day_n_backward -= 1 ;; Remove 1 day to compensate that when the loop exits after finding a file, each counter is +1 from the actual day offset that produced the match.
+    
     if (count_forward eq 0) and (count_backward eq 0) then begin
       
-      message, "No STIX calibration file was found in the month before or after " +date_path[0]+". Please, download a calibration file manually."
+      message, [" ", " ", "No STIX calibration file was found within 2 days before or after " +date_path[0]+". Please, download a calibration file manually.", " ", " "] 
       
     endif else begin
       
@@ -115,7 +121,7 @@ function stx_get_calibration_file, start_time, end_time, out_dir=out_dir, clobbe
     
   endif
 
-  message, "Download STIX calibration file recorded at " +date_path[0], /continue
+  message, [" ", " ", "Download STIX calibration file recorded at " +date_path[0], " ", " "], /continue
 
   len_path = STRLEN(site+path)
 
@@ -123,10 +129,8 @@ function stx_get_calibration_file, start_time, end_time, out_dir=out_dir, clobbe
 
     selected_file = found_files[0]
     
-    ;; Check that the ELUT that was onboard when the calibration file was recorded is the same as the on that was on board  
-    ;; during the input time range. If not, raise an error
+    ;; Extract the calibration file start time from the filename. This is used below to verify that the ELUT onboard at the time of calibration matches the one used during the input time range.
     
-    ;; Find start time of the calibration file
     len_full_path = STRLEN(found_files[0])
     filename = STRMID(found_files[0], len_path+1, len_full_path)
 
@@ -142,19 +146,10 @@ function stx_get_calibration_file, start_time, end_time, out_dir=out_dir, clobbe
     min   = STRMID(this_start_time_file, 11, 2)
     sec   = STRMID(this_start_time_file, 13, 2)
     start_time_file = year + '-' + month + '-' + day + 'T' + hour + ':' + min + ':' + sec
-    
-    ;; Compare ELUT
-    elut_file = stx_date2elut_file(start_time_file)
-    elut_time_range = stx_date2elut_file(start_time)
-    if elut_file ne elut_time_range then message, $
-      "The closest-in-time calibration file was acquired with an onboard ELUT that differs from the one used during the selected time range. Please, manually download a different calibration file."
-    
-    ;; Download file
-    sock_copy, selected_file, out_name, local_file=out_file, out_dir = out_dir, clobber=clobber
 
   endif else begin
 
-    message, "More than 1 STIX calibration file found for this day ("+date_path[0]+").", /continue
+    message, [" ", " ", "More than 1 STIX calibration file found for this day ("+date_path[0]+"). Download the one with largest duration.", " ", " "], /continue
     
     start_time_file = []
     end_time_file = []
@@ -195,19 +190,25 @@ function stx_get_calibration_file, start_time, end_time, out_dir=out_dir, clobbe
     idx_file = where(duration eq max(duration))
     selected_file = found_files[idx_file]
     
-    ;; Check that the ELUT that was onboard when the calibration file was recorded is the same as the on that was on board
-    ;; during the input time range. If not, raise an error
-    
-    ;; Compare ELUT
-    elut_file = stx_date2elut_file(start_time_file[idx_file])
-    elut_time_range = stx_date2elut_file(start_time)
-    if elut_file ne elut_time_range then message, $
-      "The closest-in-time calibration file was acquired with an onboard ELUT that differs from the one used during the selected time range. Please, manually download a different calibration file."
-    
-    sock_copy, selected_file, out_name, local_file=out_file, out_dir = out_dir, clobber=clobber
+    start_time_file = start_time_file[idx_file]
 
   endelse
-   
+  
+  
+  ;; Check that the ELUT onboard when the calibration file was recorded matches the ELUT onboard during the input time range; otherwise, raise an error.
+
+  ;; Compare ELUT
+  elut_file = stx_date2elut_file(start_time_file)
+  elut_time_range = stx_date2elut_file(start_time)
+  if elut_file ne elut_time_range then message, $
+    [" ", " ", "The closest-in-time calibration file was acquired with an onboard ELUT that differs from the one used during the selected time range. Please, manually download a different calibration file.", " ", " "]
+
+  sock_copy, selected_file, out_name, local_file=out_file, out_dir = out_dir, clobber=clobber
+  
+  filename = STRMID(out_file, STRLEN(out_dir), STRLEN(out_file)-STRLEN(out_dir))
+  
+  message, [" ", " ", "Downloaded file: " + filename, " ", " "], /continue
+  
   return, out_file
 
   
